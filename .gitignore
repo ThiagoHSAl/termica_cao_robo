@@ -1,15 +1,15 @@
 # Datasets e capturas brutas: ficam só locais (volume de GB e imagens de pessoas).
 datasets/
-temperatura_camera/ensaio_bancada/*.npy
-temperatura_camera/ensaio_bancada/*.jpg
-temperatura_camera/calibracao/dados/*.npy
+deteccao_termica/ensaio_bancada/*.npy
+deteccao_termica/ensaio_bancada/*.jpg
+deteccao_termica/calibracao/dados/*.npy
 runs/
 
 # Pesos: só o modelo em produção sobe.
 *.pt
 *.onnx
-!temperatura_camera/thermal_person_finetune_rostos/weights/best.pt
-!temperatura_camera/thermal_person_finetune_rostos/weights/best.onnx
+!deteccao_termica/thermal_person_finetune_rostos/weights/best.pt
+!deteccao_termica/thermal_person_finetune_rostos/weights/best.onnx
 !AndroidThermalDetector/app/src/main/assets/best.onnx
 
 # Android: artefatos de build e configuração da máquina local.

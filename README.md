@@ -19,18 +19,18 @@ depois do YOLO. Ela entra na decisão de detectar e age em três direções:
 
 **Estado:** o detector funciona; a calibração que dá procedência aos limiares **ainda não foi
 coletada**. Todos os limiares térmicos do `detect.py` são provisórios. O plano está em
-`temperatura_camera/ROADMAP.md`.
+`deteccao_termica/ROADMAP.md`.
 
 ## Estrutura
 
 | Pasta | O quê |
 |---|---|
-| `temperatura_camera/` | O projeto: detector, calibração, ensaio de bancada, treino e modelo. Detalhes abaixo. |
+| `deteccao_termica/` | O projeto: detector, calibração, ensaio de bancada, treino e modelo. Detalhes abaixo. |
 | `AndroidThermalDetector/` | App Android que roda o modelo sobre o vídeo do app oficial da câmera (captura de tela + sobreposição). Tem README próprio. |
 
 Os datasets ficam fora do repositório, em `datasets/` (local).
 
-### `temperatura_camera/`
+### `deteccao_termica/`
 
 | Arquivo / pasta | Papel |
 |---|---|
@@ -59,7 +59,7 @@ CC BY 4.0, 1 classe `person`). Melhor época 94 de 100: mAP50 0,917, mAP50-95 0,
 ```bash
 # driver da câmera (engenharia reversa): https://github.com/jvdillon/p3-ir-camera
 export PYTHONPATH=~/p3-ir-camera:$PYTHONPATH
-cd temperatura_camera
+cd deteccao_termica
 python3 detect.py                                               # detecção ao vivo
 python3 calibracao/calibracao_temperatura.py --local <comodo>   # coleta (Passo 1)
 python3 calibracao/analisar_calibracao.py                        # ajuste da curva
