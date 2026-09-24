@@ -1,0 +1,2328 @@
+===============================================================================
+ DETECÇÃO DE PESSOAS REFORÇADA POR ASSINATURA TÉRMICA
+ Como o sistema funciona, como ele é calibrado e por que foi feito assim
+===============================================================================
+
+ Documento de explicação geral - escrito para quem não conhece o projeto.
+ Nenhum conhecimento prévio de programação, física ou visão computacional é
+ necessário. Todo termo técnico é explicado na primeira vez que aparece, e há
+ um glossário no final.
+
+ Projeto de Iniciação Científica - busca e salvamento (SAR)
+ Câmera Thermal Master P1 acoplada a um cão robô
+
+
+-------------------------------------------------------------------------------
+ 1. O QUE ESTE SISTEMA FAZ, EM UMA FRASE
+-------------------------------------------------------------------------------
+
+Um cão robô entra em um prédio danificado, escuro ou cheio de fumaça, e o
+sistema aponta na tela onde há pessoas - decidindo isso com DUAS evidências
+independentes, a forma do corpo e o calor que ele emite, em vez de só uma.
+
+É essa combinação que diferencia o projeto de um detector comum. Um detector
+que olha só a forma erra de dois jeitos opostos: marca um manequim como vítima,
+e deixa de marcar a vítima encolhida sob os escombros, porque ela não se parece
+com nenhuma foto de pessoa que ele já viu. A câmera térmica enxerga uma coisa
+que a forma não revela - se aquele volume está emitindo calor como um corpo
+emite - e é essa segunda opinião que corrige os dois erros.
+
+Como subproduto, o sistema também anota se o corpo detectado ainda está em
+desequilíbrio térmico com o ambiente ou se já se igualou a ele, o que ajuda a
+equipe a ordenar a fila de resgate. Mas isso é informação SECUNDÁRIA, e o
+documento é explícito quanto a isso do começo ao fim: essa anotação nunca
+decide se alguém aparece ou não na tela.
+
+
+-------------------------------------------------------------------------------
+ 2. O PROBLEMA
+-------------------------------------------------------------------------------
+
+Em um desabamento, incêndio ou colapso de estrutura, entrar no prédio é
+perigoso para o socorrista. O cão robô entra no lugar dele. Mas o robô precisa
+enxergar - e é aí que começa a dificuldade:
+
+  - Pode estar escuro. Uma câmera comum não enxerga nada.
+  - Pode ter fumaça e poeira. Uma câmera comum enxerga ainda menos.
+  - A vítima pode estar parcialmente coberta por escombros, deitada, encolhida
+    ou de costas - nada parecido com a foto de uma pessoa em pé.
+
+A câmera térmica resolve os dois primeiros problemas: ela não depende de luz
+nenhuma e atravessa fumaça razoavelmente bem. Mas ela cria um problema novo: a
+câmera térmica mostra TUDO que tem temperatura, e um cano de água quente, um
+notebook ligado e um radiador aparecem tão brilhantes quanto uma pessoa.
+
+Sobra então o terceiro item da lista, que é o mais difícil e é o assunto
+principal deste documento. Existe um programa capaz de reconhecer a FORMA de
+uma pessoa numa imagem térmica, e ele funciona bem quando a pessoa está inteira,
+em pé e visível. Uma vítima de desabamento raramente está assim. Ela está
+encolhida atrás de uma laje, com metade do corpo coberta, deitada de bruços, de
+costas - configurações que praticamente não existem no material com que esse
+programa foi treinado.
+
+O resultado é que o detector de forma erra nas DUAS direções ao mesmo tempo:
+
+  - ele marca coisas que não são gente, porque um manequim, um casaco pendurado
+    ou uma sombra em formato de tronco têm forma convincente;
+
+  - e deixa de marcar gente de verdade, porque a vítima real não tem forma
+    nenhuma de pessoa.
+
+O segundo erro é incomparavelmente mais grave num resgate, e é justamente o que
+um detector de forma sozinho não tem como consertar - ele não dispõe de nenhuma
+outra informação para consultar. O projeto existe para lhe dar essa informação.
+
+
+-------------------------------------------------------------------------------
+ 3. TRÊS COISAS QUE VOCÊ PRECISA SABER ANTES
+-------------------------------------------------------------------------------
+
+3.1 O que uma câmera térmica realmente mede
+...........................................
+
+Existe uma ideia errada muito comum: a de que a câmera térmica "vê o calor"
+como quem vê uma luz colorida. Não é isso.
+
+Todo objeto acima do zero absoluto emite radiação infravermelha - uma forma de
+luz que nossos olhos não captam. Quanto mais quente o objeto, mais ele emite.
+A câmera térmica mede essa emissão e converte em temperatura.
+
+A maneira mais útil de pensar nela é esta:
+
+    A câmera térmica não é uma câmera. É uma GRADE DE TERMÔMETROS.
+
+A nossa tem 160 termômetros de largura por 120 de altura, ou seja, 19.200
+termômetros minúsculos apontando cada um para um pedacinho diferente do
+ambiente. Vinte vezes por segundo, cada um deles informa uma temperatura em
+graus Celsius. A "imagem" que aparece na tela é só uma forma conveniente de
+olhar para esses 19.200 números de uma vez: quanto mais quente, mais claro.
+
+Duas consequências importantes disso:
+
+  (a) A imagem é MUITO pequena. Uma foto de celular tem cerca de 12 milhões de
+      pontos; esta câmera tem 19 mil - umas 600 vezes menos. É uma imagem
+      grosseira, quase um mosaico.
+
+  (b) Cada ponto da imagem, chamado PIXEL, tem um número de verdade por trás,
+      não apenas um tom de cinza. Podemos perguntar ao sistema "quantos graus
+      exatamente tem este ponto?" - e é isso que torna o projeto possível.
+
+
+3.2 O que é o YOLO
+..................
+
+YOLO é um programa de inteligência artificial que olha uma imagem e desenha
+retângulos em volta das coisas que reconhece, dizendo o que cada uma é. No
+nosso caso, ele foi treinado especificamente com imagens térmicas de pessoas
+e sua única tarefa é responder: "há forma de gente aqui? onde?".
+
+Esse retângulo que ele desenha tem um nome que aparece o tempo todo daqui em
+diante: BBOX (de "bounding box", caixa delimitadora). É simplesmente o
+retângulo que envolve a pessoa detectada.
+
+O YOLO é bom em FORMA. Ele reconhece a silhueta de um corpo humano. E é
+completamente cego a temperatura - para ele, uma estátua com o formato certo e
+uma pessoa são a mesma coisa.
+
+
+3.3 Por que precisamos dos dois juntos
+......................................
+
+Aqui está o raciocínio central do projeto inteiro:
+
+    O YOLO responde SE AQUILO TEM FORMA DE PESSOA.
+    A temperatura responde SE AQUILO EMITE CALOR COMO UMA PESSOA EMITE.
+
+São duas perguntas diferentes sobre o mesmo pedaço de imagem, e nenhuma das
+duas respostas é conclusiva sozinha:
+
+  - Só temperatura: um radiador ficaria marcado como vítima. Um espelho
+    refletindo uma fonte de calor também. Sem noção de forma, qualquer mancha
+    quente vira pessoa.
+
+  - Só forma: um manequim, uma estátua ou um casaco pendurado seriam marcados
+    como vítima - e a pessoa encolhida sob os escombros não seria.
+
+O ponto delicado, e que vale entender antes de qualquer outra coisa, é COMO
+juntar as duas respostas. Existe uma forma óbvia e errada:
+
+    ERRADO: deixar o YOLO decidir sozinho quem é pessoa, e usar a temperatura
+            só para colorir o que ele já decidiu.
+
+Isso parece razoável e foi a primeira versão do sistema. O defeito é que, nesse
+arranjo, a temperatura só consegue TIRAR coisas da tela - nunca acrescentar. Se
+o YOLO não viu a vítima soterrada, ela não existe para o resto do sistema, por
+mais evidente que seja a mancha de calor onde ela está. E o erro mais grave do
+detector de forma, o de deixar de marcar gente, continua exatamente igual.
+
+O arranjo correto é tratar as duas como VOTOS sobre a mesma pergunta:
+
+    CERTO:  cada evidência produz um grau de convicção, e a decisão sai da
+            combinação dos dois. Nenhuma das duas decide sozinha.
+
+Com isso a temperatura passa a poder fazer as três coisas que interessam: baixar
+a convicção de uma caixa sem assinatura compatível, SUSTENTAR uma caixa que a
+forma sozinha descartaria, e apontar lugares que a forma não olhou. A seção 4.3
+mostra como essa combinação é feita na prática.
+
+
+-------------------------------------------------------------------------------
+ 4. COMO O SISTEMA DECIDE
+-------------------------------------------------------------------------------
+
+4.1 Por que não usamos a temperatura direta
+...........................................
+
+O primeiro impulso de qualquer um seria escrever uma regra assim:
+
+    "Se estiver acima de 30 graus, é uma pessoa viva."
+
+Essa regra funciona no laboratório e falha em campo. Motivo: 30 graus não
+significa a mesma coisa em todo lugar.
+
+  - Num galpão a 15 graus, uma pessoa é um ponto quentíssimo em contraste com
+    o fundo. A regra funciona.
+  - Numa sala a 32 graus num dia de verão, TUDO está acima de 30 graus. As
+    paredes, o sofá, o chão. A regra marca o prédio inteiro como pessoa.
+
+Por isso o sistema não trabalha com a temperatura em si, e sim com a DIFERENÇA
+entre a pessoa e o ambiente ao redor dela. Essa diferença tem um símbolo que
+aparece o tempo todo no projeto:
+
+    ΔT  (lê-se "delta T", e significa apenas "diferença de temperatura")
+
+    ΔT = temperatura do alvo  -  temperatura do ambiente
+
+Se a sala está a 20 graus e a pessoa aparece a 31, o ΔT é +11 graus. Se a sala
+está a 28 e a pessoa aparece a 33, o ΔT é +5. O número absoluto mudou muito,
+mas a pergunta passa a ser sempre a mesma: "este corpo se destaca do fundo?".
+
+Isso traz um segundo benefício, mais sutil. Toda câmera tem pequenos erros de
+medição, que fazem todas as leituras subirem ou descerem juntas. Como o ΔT é
+uma subtração entre duas leituras da MESMA câmera no MESMO instante, boa parte
+desse erro se cancela sozinha.
+
+
+4.2 O detalhe que quase todo mundo erra: nem sempre a pessoa é o ponto quente
+............................................................................
+
+Um corpo vivo tem um teto. Por mais calor que a pessoa produza, a superfície
+da pele exposta fica em torno de 33 a 36 graus, e não passa muito disso - o
+suor existe justamente para impedir que passe. A temperatura interna é 37, mas
+a pele, que é o que a câmera enxerga, fica um pouco abaixo.
+
+Agora pense no que isso significa num incêndio, ou num galpão industrial, ou
+num prédio abandonado sob o sol, onde as paredes chegam a 45 graus:
+
+    A pessoa passa a ser o objeto MAIS FRIO da cena.
+
+Este é o ponto que costuma surpreender quem ouve sobre o projeto pela primeira
+vez, e um sistema que só procure "manchas quentes" fica completamente cego
+justamente na situação mais crítica - o incêndio, onde a busca é mais urgente.
+
+Por causa disso, o sistema primeiro mede a temperatura do cômodo e decide em
+qual de três situações - que chamamos de REGIMES - ele está operando:
+
+  REGIME FRIO (ambiente abaixo de 33 graus) - a situação normal
+      As paredes estão mais frias que a pele. A pessoa é uma mancha QUENTE.
+      O sistema procura o ponto mais quente dentro do retângulo.
+
+  REGIME QUENTE (ambiente acima de 36 graus) - incêndio, galpão, sol
+      As paredes estão mais quentes que a pele. A pessoa é uma mancha FRIA.
+      O sistema inverte e procura o ponto mais FRIO dentro do retângulo.
+
+  CROSSOVER (ambiente entre 33 e 36 graus) - a zona cega
+      O ambiente está exatamente na temperatura da pele. Ninguém se destaca de
+      nada. É o equivalente térmico de procurar um gato branco numa parede
+      branca.
+
+O que o sistema faz no crossover merece destaque, porque é uma decisão de
+projeto deliberada: a térmica SE ABSTÉM. Ela não vota nem a favor nem contra, e
+a decisão fica valendo exatamente o que a forma do YOLO disser sozinha - nem
+mais, nem menos. Votar contra numa faixa em que ninguém tem contraste seria
+descartar vítimas por um defeito do método, e num sistema de resgate deixar de
+marcar uma vítima é o erro mais caro que existe.
+
+Vale reparar que "abster-se" não é a mesma coisa que "achar que não é pessoa".
+São situações que um sistema mal construído confunde: no crossover a leitura de
+contraste zero não significa nada, enquanto num cômodo frio a mesma leitura de
+contraste zero é informação de verdade. A seção 4.3 mostra como a matemática da
+combinação distingue os dois casos.
+
+Há ainda um efeito que vale registrar no regime quente: a lógica do corpo em
+equilíbrio se inverte. Num cômodo frio, um corpo sem produção de calor esfria
+até a temperatura ambiente. Num cômodo quente, ele AQUECE até a temperatura
+ambiente. Nos dois casos o sinal é o mesmo - o corpo se iguala ao ambiente -
+mas o caminho até lá é oposto.
+
+
+4.3 Como as duas evidências viram uma decisão
+.............................................
+
+Esta é a engrenagem central do sistema. Ela tem quatro peças.
+
+PEÇA 1 - O YOLO passa a entregar candidatos, não decisões.
+
+Todo detector de forma produz, junto com cada retângulo, um número entre 0 e 1
+chamado CONFIANÇA: o quanto ele acredita naquilo. Um detector comum escolhe um
+corte - digamos 0,5 - e joga fora tudo que ficar abaixo.
+
+Esse corte é o problema. É exatamente ali, logo abaixo dele, que mora a vítima
+encolhida: o YOLO viu alguma coisa, deu 0,3, e o sistema jogou fora sem nunca
+consultar a temperatura. Por isso o corte do YOLO foi baixado para 0,2 - não
+para aceitar mais coisas, mas para que a térmica tenha o que examinar antes de
+qualquer descarte. O que sai do YOLO agora é uma LISTA DE CANDIDATOS.
+
+PEÇA 2 - A térmica atribui uma nota de plausibilidade a cada candidato.
+
+Para cada candidato, o sistema mede o contraste dentro do retângulo e compara
+com o contraste que uma pessoa DAQUELE TAMANHO deveria produzir - o tamanho
+entra porque a leitura de um alvo distante vem diluída, e isso é o assunto
+inteiro da seção 5. Dessa comparação sai um número entre 0 e 1:
+
+    perto de 1  -  a assinatura é a de uma pessoa
+    perto de 0  -  não há assinatura compatível ali
+
+Dois detalhes desse número são decisões de projeto, não acidentes:
+
+    Ele nunca chega a 0. Contraste ausente NÃO prova ausência de pessoa: um
+    corpo em equilíbrio térmico com o ambiente lê contraste zero e continua
+    sendo uma vítima. A térmica pode enfraquecer uma detecção, jamais anulá-la.
+
+    Ele nunca chega a 1. Contraste presente também não prova pessoa: um animal,
+    um motor morno ou uma fresta de ar quente produzem assinatura parecida. A
+    térmica reforça, não decide.
+
+No crossover essa nota é exatamente 0,5 - o valor neutro, que é a forma
+matemática de se abster.
+
+PEÇA 3 - As duas se combinam num score único.
+
+A confiança do YOLO e a nota da térmica são multiplicadas de um jeito que tem
+três comportamentos, e são eles que definem o sistema inteiro:
+
+    nota = 0,5   ->  o score é a confiança do YOLO INTACTA.
+                     A térmica se absteve e não atrapalhou nada.
+
+    nota > 0,5   ->  o score SOBE. Uma detecção fraca que o YOLO sozinho
+                     descartaria pode passar a ser aceita. É o RESGATE, e é o
+                     ganho principal do projeto.
+
+    nota < 0,5   ->  o score DESCE. Uma caixa com forma convincente e sem
+                     assinatura compatível pode deixar de ser aceita. É a
+                     DERRUBADA do falso positivo.
+
+No fim, o sistema aceita a detecção se o score passar de 0,5.
+
+Vale insistir num ponto que parece detalhe e não é: 0,5 é exatamente o mesmo
+corte que o detector antigo aplicava direto na confiança do YOLO. A barra final
+não foi afrouxada - o que mudou foi que ela passou a ser aplicada a um número
+que já ouviu as duas evidências. Se a barra tivesse sido baixada junto, qualquer
+ganho poderia ser explicado só pelo afrouxamento, e não haveria como afirmar que
+a térmica contribuiu com coisa alguma.
+
+Uma assimetria deliberada. A térmica resgata com mais força do que derruba. Uma
+detecção do YOLO com confiança alta SOBREVIVE a uma assinatura térmica adversa;
+uma com confiança baixa depende da térmica para passar. Isso é intencional e
+reflete a assimetria do problema: marcar um manequim custa uma ida em falso, e
+deixar de marcar uma pessoa custa uma vida.
+
+PEÇA 4 - A térmica também aponta onde o YOLO não olhou.
+
+As três peças acima ainda deixam a térmica presa às caixas que o YOLO produziu.
+Se o YOLO não desenhou nada em cima da vítima soterrada, não há candidato para
+examinar e nenhuma nota vai ser calculada ali.
+
+Por isso o sistema faz uma varredura própria: procura manchas de contraste que
+estejam FORA de qualquer caixa do YOLO e que tenham tamanho e formato
+compatíveis com um corpo. Um cano quente atravessando a parede é comprido e
+fino demais; uma faixa de piso aquecida pelo sol é grande demais; um contorno de
+porta é vazado demais. O que sobra vira um CANDIDATO TÉRMICO, desenhado na tela
+com a instrução de aproximar e reavaliar.
+
+Um candidato térmico NÃO é uma detecção, e o documento faz questão da distinção:
+o sistema não está afirmando que ali há uma pessoa, está afirmando que ali há
+algo com calor e forma de corpo que ninguém examinou de perto. Num prédio
+desabado, isso é exatamente o tipo de lugar para onde se manda o robô.
+
+
+4.4 As cores que aparecem na tela
+.................................
+
+A cor do retângulo diz de ONDE veio a detecção - qual evidência a sustenta.
+Isso é uma mudança em relação à versão anterior do sistema, em que a cor dizia
+o estado do corpo, e é uma mudança com propósito: assim a contribuição da
+térmica fica visível na tela e contável em vídeo de bancada.
+
+  VERDE - "[Y+T]"
+      As duas evidências concordam. O YOLO já bastava e a térmica confirmou.
+
+  AMARELO - "[T>Y]"
+      RESGATE. O YOLO sozinho teria perdido esta pessoa; foi a térmica que
+      sustentou a detecção. Cada caixa amarela na tela é uma vítima que o
+      detector anterior não mostraria.
+
+  CIANO - "[Y]"
+      Crossover. A térmica se absteve e a decisão é da forma sozinha.
+
+  AZUL - "[T]"
+      CANDIDATO TÉRMICO. O YOLO não viu nada aqui; a varredura térmica achou
+      algo com calor e forma de corpo. Não é uma detecção - é um lugar para
+      onde ir olhar.
+
+  (não aparece)
+      Ou o score ficou abaixo de 0,5, ou a caixa foi vetada por ser fonte de
+      calor. O modo de depuração ('d') desenha essas caixas em vermelho para
+      inspeção, e o veto merece a seção própria logo abaixo.
+
+Além da cor, cada caixa carrega o score final, a confiança que o YOLO deu
+sozinho, a distância estimada e o estado térmico do corpo - esta última sendo a
+anotação secundária de que fala a seção 10.1. E no alto da tela fica o placar
+do frame: quantos candidatos o YOLO produziu, quantos foram aceitos, quantos
+foram RESGATADOS, quantos foram derrubados e quantos candidatos térmicos
+apareceram. Esse placar é o número que justifica a fusão existir.
+
+
+4.5 O veto: como o sistema reconhece um radiador
+................................................
+
+Há um caso em que a térmica não vota: ela VETA. Se o alvo está quente demais
+para ser um corpo humano, a caixa é eliminada sem passar pela combinação da
+seção 4.3, por mais convicto que o YOLO esteja.
+
+A diferença de tratamento tem razão de ser. Tudo na seção 4.3 é pesagem de
+evidência: a assinatura sugere, com mais ou menos força, que aquilo é gente.
+Aqui o argumento é de outra natureza - é uma impossibilidade física. Pele humana
+não passa do teto fisiológico, e um corpo passivo não ultrapassa a temperatura
+do ambiente. Não faz sentido pesar isso contra a forma; o que está acima desse
+limite simplesmente não é uma pessoa.
+
+Este é o ÚNICO veto do sistema, e vale dizer por quê: qualquer outro motivo para
+apagar uma caixa seria uma opinião da térmica sobre um caso ambíguo, e opinião
+entra na balança, não no veto.
+
+A regra intuitiva seria "acima de 40 graus não é pele humana, então é um
+objeto quente". Ela está certa - mas só num cômodo frio.
+
+Num incêndio, com o ambiente a 45 graus, TUDO no cômodo está acima de 40
+graus. As paredes, o chão, os móveis - e também um corpo que já se igualou a
+esse ambiente. Aplicar ali a regra dos 40 graus faria o sistema descartar
+justamente a vítima que ele deveria estar sinalizando, e ainda por cima de
+forma invisível, já que caixas descartadas não são desenhadas.
+
+Por isso a pergunta muda conforme o regime, usando em cada um o argumento que
+é válido ali:
+
+  No cômodo FRIO, vale o argumento do TETO:
+      "Nada que seja passivo chega a 40 graus num cômodo a 20. Quem está lá em
+      cima produz calor próprio - logo, não é uma pessoa."
+
+  No cômodo QUENTE, vale o argumento do LIMITE:
+      "Um objeto passivo, no máximo, ALCANÇA a temperatura do ambiente - nunca
+      a ultrapassa. Uma xícara de água deixada numa sala a 45 graus chega a 45
+      e para; ela não continua esquentando sozinha. Então, aqui, fonte de
+      calor é quem está MAIS QUENTE QUE O PRÓPRIO AMBIENTE."
+
+O segundo critério é relativo, e é isso que o torna imune ao problema. Um
+cadáver em equilíbrio marca zero de diferença; um radiador marca dezenas de
+graus acima. Não há mais como confundir os dois, por mais quente que esteja o
+cômodo.
+
+Vale registrar por que esse detalhe é digno de nota. Numa versão anterior o teto
+absoluto era aplicado nos dois regimes, e então um corpo equilibrado num cômodo
+a 42 graus lia exatamente 42 graus: a decisão entre marcá-lo e apagá-lo acabava
+dependendo do SINAL DO RUÍDO do sensor - um décimo de grau para cima sumia com
+a caixa da tela, um décimo para baixo a mantinha. Uma vítima invisível decidida
+no cara ou coroa, no cenário mais crítico que o sistema tem.
+
+O risco de um veto é exatamente esse: como ele não passa pela balança, um veto
+mal formulado apaga vítima sem deixar rastro na tela. É por isso que este é o
+único, que ele é apoiado num argumento físico e não numa estatística, e que o
+modo de depuração existe para mostrar o que ele está eliminando.
+
+
+-------------------------------------------------------------------------------
+ 5. O PROBLEMA CENTRAL: DISTÂNCIA
+-------------------------------------------------------------------------------
+
+Esta seção é a mais importante do documento. É ela que explica por que a
+calibração precisa existir.
+
+Uma pessoa a 2 metros e a mesma pessoa a 10 metros têm exatamente a mesma
+temperatura. Mas a câmera NÃO lê a mesma temperatura nos dois casos. Ela lê um
+valor bem mais baixo quando a pessoa está longe.
+
+Isso não é defeito da câmera. É consequência inevitável de ela ter poucos
+pixels, e o fenômeno tem nome:
+
+    EFEITO SPOT-SIZE (ou "efeito do tamanho do ponto")
+
+Funciona assim. Cada um dos 19.200 termômetros da grade aponta para um
+pedacinho do mundo, e esse pedacinho fica MAIOR conforme a distância aumenta.
+Nesta câmera, um único pixel cobre:
+
+    a  2 metros ...... um quadrado de aproximadamente 1,1 cm
+    a  5 metros ...... um quadrado de aproximadamente 2,8 cm
+    a 10 metros ...... um quadrado de aproximadamente 5,7 cm
+
+Quando a pessoa está perto, existem pixels que enxergam SÓ pessoa. O
+termômetro daquele ponto mede a pele e nada mais - a leitura é honesta.
+
+Quando a pessoa está longe, praticamente todo pixel enxerga um pedaço de
+pessoa e um pedaço de parede ao mesmo tempo. E o termômetro não sabe separar
+as duas coisas: ele informa uma temperatura só, que é a mistura das duas.
+
+    A analogia mais direta é misturar tintas. Se você mistura tinta vermelha
+    com tinta branca, não obtém "vermelho e branco lado a lado" - obtém rosa.
+    O pixel faz a mesma coisa com temperatura: pele a 33 graus misturada com
+    parede a 20 graus não dá 33 nem 20, dá algo em torno de 26. E não há como
+    desfazer a mistura depois.
+
+Quanto mais longe, menor a fração de pessoa dentro de cada pixel, e mais a
+leitura é puxada na direção da parede. A consequência prática é grave:
+
+    Uma pessoa VIVA e distante é lida como se fosse FRIA.
+
+E agora junte isso com a seção 4.3. Se o sistema exigisse sempre o mesmo
+contraste para dar uma nota alta, a pessoa a 10 metros receberia nota baixa
+NÃO por deixar de ser pessoa, mas por estar longe. A térmica passaria a votar
+contra as vítimas distantes - o oposto exato do que ela deve fazer.
+
+É por isso que a exigência de contraste não é um número, e sim uma CURVA que
+depende do tamanho aparente do alvo:
+
+    retângulo grande (pessoa perto)  ->  a leitura é honesta, exige-se muito
+    retângulo pequeno (pessoa longe) ->  a leitura vem diluída, exige-se pouco
+
+Uma pessoa a 10 metros que produza o contraste fraco esperado a 10 metros
+recebe nota ALTA - porque foi comparada com a régua certa. A pergunta que a
+térmica realmente responde não é "quanto contraste tem?", e sim "tem o
+contraste que uma pessoa desse tamanho aparente deveria ter?".
+
+Repare no que acabamos de fazer: usamos o TAMANHO DO RETÂNGULO como substituto
+da distância. Isso é necessário porque, no meio de uma operação de resgate,
+ninguém tem uma trena para medir a que distância está a vítima. Mas o tamanho
+do retângulo o sistema conhece de graça, e ele encolhe conforme a pessoa se
+afasta. É uma medida de distância que já está disponível na própria imagem.
+
+E é essa curva - a régua que muda com a distância - que a calibração existe
+para levantar. Sem ela, o sistema teria que escolher entre exigir muito e perder
+as vítimas distantes, ou exigir pouco e aceitar qualquer parede morna.
+
+
+-------------------------------------------------------------------------------
+ 6. O QUE É CALIBRAR, E POR QUE PRECISAMOS
+-------------------------------------------------------------------------------
+
+Chegamos às DUAS perguntas que o projeto precisa responder. Elas são
+independentes, exigem tipos diferentes de dado, e confundi-las é o erro mais
+fácil de cometer aqui.
+
+    PERGUNTA 1 - De quantos graus uma pessoa se destaca do ambiente, para cada
+                 tamanho de retângulo?
+
+Se o retângulo é grande (pessoa perto), a leitura é honesta e a pessoa produz
+bastante diferença - digamos, 3 graus. Se o retângulo é pequeno (pessoa longe),
+a leitura já vem diluída pelo efeito spot-size, e a mesma pessoa produz talvez
+meio grau. Esta pergunta define a RÉGUA da seção 5, e é respondida medindo
+pessoas de verdade a distâncias conhecidas.
+
+    PERGUNTA 2 - Quanto vale essa informação contra a forma?
+
+Saber o que uma pessoa produz não diz, sozinho, o quanto a térmica deve empurrar
+a decisão. Para isso é preciso saber também o que um NÃO-humano produz na mesma
+régua. Se manequins e pessoas produzissem leituras parecidas, a térmica não
+teria nada a acrescentar e a nota dela deveria ficar sempre perto de 0,5. Se
+produzem leituras bem separadas, ela pode empurrar com força.
+
+É uma distinção que vale ter clara: a pergunta 1 é sobre o alvo, a pergunta 2 é
+sobre a CAPACIDADE DE DISTINGUIR. Medir só a primeira e supor a segunda é
+precisamente o que faz um sistema parecer calibrado sem ser.
+
+O ponto é: NINGUÉM SABE quais são esses números. Eles não estão em nenhum
+manual, porque dependem desta câmera específica, desta lente, desta resolução
+e do tipo de alvo. Descobri-los medindo é o que chamamos de calibração.
+
+    Uma analogia: comprar uma balança de cozinha nova e não confiar cegamente
+    nela. Você coloca em cima um peso que sabe que tem 1 kg, vê o que ela
+    mostra, repete com 2 kg, com 5 kg, e anota os desvios. Depois disso, você
+    sabe interpretar qualquer número que ela mostrar.
+
+    A calibração aqui é o mesmo procedimento, com uma diferença: em vez de
+    variar o peso, variamos a DISTÂNCIA - porque é a distância que distorce a
+    medida. E para a pergunta 2 há um passo a mais na analogia: além de pesar
+    objetos de massa conhecida, é preciso pesar coisas que NÃO são o que se
+    quer medir, para saber se a balança consegue distingui-las.
+
+Hoje o sistema roda com números provisórios, escolhidos por ordem de grandeza
+plausível. Ele funciona, mas ninguém pode afirmar a que distância ele para de
+funcionar, nem quantos falsos positivos ele derruba de verdade. Depois da
+calibração, as duas coisas passam a ser resultados medidos - que é o tipo de
+número que um trabalho científico precisa apresentar, e que também define como o
+robô deve varrer um cômodo na prática.
+
+
+-------------------------------------------------------------------------------
+ 7. COMO A CALIBRAÇÃO É FEITA NA PRÁTICA
+-------------------------------------------------------------------------------
+
+O procedimento é deliberadamente simples, porque precisa ser executado por uma
+pessoa segurando uma trena.
+
+  PASSO 1 - Escolher um cômodo e anotar qual é.
+      O programa é iniciado informando o nome do local. Isso permite separar
+      depois as medições feitas em ambientes diferentes.
+
+  PASSO 2 - Posicionar um voluntário a uma distância conhecida.
+      Mede-se com trena: 1 metro, 2, 3, 4, 5, 6, 8, 10, 12. A distância real é
+      informada ao programa por teclado.
+
+  PASSO 3 - Registrar as condições do voluntário.
+      Se está em pé, sentado, agachado ou deitado. Se está de manga curta,
+      manga longa ou casaco. Cada tecla alterna uma dessas opções.
+
+  PASSO 4 - Capturar cerca de dez amostras por distância.
+      A cada tecla, o programa guarda a temperatura medida, o tamanho do
+      retângulo, a temperatura do ambiente e a imagem bruta completa - esta
+      última para permitir refazer qualquer conta no futuro sem repetir o
+      experimento.
+
+  PASSO 5 - Coletar os NEGATIVOS.
+      Aponte a câmera para coisas que NÃO são gente e capture quando o detector
+      de forma desenhar caixa nelas: manequim, casaco pendurado numa cadeira,
+      mochila encostada na parede, radiador, notebook ligado, e uma pessoa
+      refletida num vidro ou numa superfície de inox.
+
+      Este passo responde a pergunta 2 da seção 6 e é o que costuma ser pulado,
+      porque parece que não se está "medindo nada". Está: sem ele não existe
+      nenhum número de falso positivo para apresentar, e a força com que a
+      térmica empurra a decisão continua sendo chute.
+
+      Colete quantidade parecida com a de pessoas. A conta que estima essa força
+      supõe as duas classes igualmente representadas; coletar 200 pessoas e 5
+      manequins produz um número enviesado, e o programa de análise avisa quando
+      o desequilíbrio passa de três para um.
+
+  PASSO 6 - Repetir tudo num cômodo frio e num cômodo quente.
+      Sem isso, metade do sistema (o regime quente, descrito em 4.2) nunca é
+      testada com dado real.
+
+  PASSO 7 - Rodar o programa de análise.
+      Ele lê tudo que foi coletado, desenha os gráficos e imprime os números
+      finais, prontos para serem colocados no detector.
+
+O trabalho todo é repetitivo e demorado, e a tentação é pular as distâncias
+grandes, que são as mais incômodas de medir. Vale registrar que essas são
+justamente as que mais importam: são elas que determinam o alcance máximo do
+sistema. Uma calibração feita só de perto produz números otimistas e um
+detector que perde vítimas distantes.
+
+
+7.1 Um alvo especial: o corpo que não se aquece
+...............................................
+
+Há uma lacuna no procedimento acima: todos os voluntários estão vivos. Nenhum
+dado é coletado sobre o corpo que já parou de regular a própria temperatura, e
+sem isso a anotação de estado térmico da seção 10.1 não teria fundamento.
+
+A solução adotada é usar um substituto - o que em pesquisa se chama de PROXY,
+ou seja, um objeto que reproduz a característica de interesse sem ser a coisa
+real. No nosso caso: um recipiente com água aquecida a aproximadamente 35
+graus, colocado no cômodo e medido repetidamente enquanto esfria.
+
+A ideia é que esse recipiente reproduz a característica essencial de um corpo
+que não regula mais a própria temperatura: ele não repõe o calor que perde, e
+por isso vai gradualmente se igualando ao ambiente. O programa cronometra o
+processo e registra a diferença de temperatura ao longo de uma hora, gerando
+uma CURVA DE RESFRIAMENTO.
+
+Uma observação de prioridade, já que o tempo de coleta é finito: este passo
+alimenta a anotação SECUNDÁRIA do sistema, não a detecção. Se for preciso
+escolher entre coletar a curva de resfriamento e coletar os negativos do passo
+5, os negativos vêm primeiro - são eles que sustentam o produto principal.
+
+
+-------------------------------------------------------------------------------
+ 8. O QUE SAI DA CALIBRAÇÃO
+-------------------------------------------------------------------------------
+
+A análise produz nove gráficos, organizados em três linhas. A primeira linha
+responde a pergunta 1 da seção 6 (o que uma pessoa produz), a segunda confere a
+sanidade da coleta, e a terceira responde a pergunta 2 (o quanto isso separa
+pessoa de não-pessoa). Os mais importantes:
+
+  GRÁFICO 1 - Diferença de temperatura x tamanho do retângulo
+      Cada ponto é uma medição de PESSOA. Esperamos ver uma nuvem que sobe da
+      esquerda para a direita: retângulos maiores (pessoa perto) produzem
+      diferenças maiores. O que interessa não é o meio da nuvem, mas a sua
+      BORDA DE BAIXO - o pior caso, a pessoa que menos se destacou em cada
+      tamanho. Essa borda é a régua que o detector vai usar.
+
+      Usamos o pior caso, e não a média, por uma razão de segurança: uma régua
+      colocada na média trataria metade das pessoas reais como implausíveis.
+
+  GRÁFICO 2 - Diferença de temperatura x distância
+      Aqui o efeito spot-size aparece visualmente: uma curva descendo. Se essa
+      curva estiver irregular, em ziguezague, é sinal de que alguma variável
+      não foi controlada durante a coleta (roupa diferente, pose diferente) e
+      a calibração precisa ser refeita.
+
+  GRÁFICO 3 - Diferença com sinal x temperatura do ambiente
+      Este verifica se as fronteiras de 33 e 36 graus estão certas. Espera-se
+      ver os pontos positivos (pessoa mais quente) em ambientes frios,
+      negativos (pessoa mais fria) em ambientes quentes, e a travessia do zero
+      acontecendo dentro daquela faixa. Se a travessia acontecer em outro
+      lugar, os valores usados pelo sistema são corrigidos pelo que se mediu -
+      e não mantidos porque estavam num livro.
+
+  GRÁFICO 7 - Separação pessoa x não-humano
+      Duas nuvens lado a lado, pessoas e negativos, medidas numa régua
+      NORMALIZADA: em vez de graus, cada ponto é expresso em múltiplos do que
+      se espera de uma pessoa daquele tamanho. O valor 1 significa "produziu
+      exatamente o contraste esperado". Normalizar é o que torna comparável uma
+      pessoa a 2 metros e outra a 10; em graus brutos, a distante sempre
+      pareceria mais fraca e a separação ficaria confundida com a distância da
+      coleta.
+
+      Se as duas nuvens estiverem bem separadas, a térmica tem o que
+      acrescentar. Se estiverem sobrepostas, ela não tem - e é melhor descobrir
+      isso num gráfico do que numa operação.
+
+  GRÁFICO 8 - O efeito da fusão, amostra por amostra
+      No eixo horizontal, a confiança que o YOLO deu sozinho; no vertical, o
+      score depois de ouvir a térmica. As duas linhas de corte em 0,5 dividem o
+      gráfico em quadrantes, e é neles que se lê o resultado do projeto:
+
+          canto superior ESQUERDO  - pessoas RESGATADAS: o YOLO perderia, o
+                                     score fundido aceita
+          canto inferior DIREITO   - negativos DERRUBADOS: o YOLO aceitaria, o
+                                     score fundido rejeita
+          ponto VERDE no inferior direito - vítima perdida pela térmica. É o
+                                     número que precisa ficar em zero.
+
+  GRÁFICO 9 - Positivos e negativos sobre a curva
+      Os dois grupos desenhados juntos sobre a régua ajustada. Negativo abaixo
+      da curva é caso que a fusão resolve; negativo pouco acima é confusão real,
+      que nem a fusão nem o veto pegam; negativo muito acima é fonte de calor,
+      que sai pelo veto da seção 4.5 e não é motivo de preocupação.
+
+O resultado final são poucos números, que substituem os valores provisórios do
+detector. É pouca coisa em quantidade, mas é a diferença entre um sistema com
+parâmetros chutados e um sistema com parâmetros medidos.
+
+
+-------------------------------------------------------------------------------
+ 9. DETALHES PEQUENOS QUE ESTRAGAM TUDO
+-------------------------------------------------------------------------------
+
+Estes quatro pontos parecem burocráticos, mas cada um deles é capaz de
+invalidar silenciosamente uma calibração inteira - o pior tipo de erro, porque
+os gráficos continuam bonitos e os números continuam parecendo razoáveis.
+
+9.1 Como medir a temperatura "do ambiente"
+..........................................
+
+O ΔT depende de sabermos a temperatura do ambiente. A forma óbvia de obtê-la é
+tirar o valor típico de toda a imagem - tecnicamente, a MEDIANA, que é o valor
+do meio quando se ordena todos os números do menor para o maior. A mediana é
+preferível à média porque não se deixa arrastar por alguns poucos valores
+extremos: uma lâmpada muito quente num canto puxaria a média para cima, mas
+quase não move a mediana.
+
+Só que essa forma tem uma falha traiçoeira. Se a pessoa estiver a 1 metro da
+câmera, ela ocupa quase metade da imagem - e o "valor típico da imagem" passa
+a ser a própria pessoa. O sistema então compara a pessoa com ela mesma e
+conclui que não há diferença nenhuma. E isso acontece justamente nas medições
+de perto, que deveriam ser as de maior contraste e as mais confiáveis.
+
+A correção foi excluir do cálculo todos os pixels que estão dentro dos
+retângulos detectados, com uma folga de alguns pixels ao redor - porque o
+calor da pessoa "vaza" um pouco para fora da caixa, por causa do borramento e
+do calor refletido no chão. E quando não sobra imagem de fundo suficiente para
+uma estimativa honesta, o sistema avisa na tela em vermelho e a calibração
+recusa a amostra, em vez de gravar um número ruim disfarçado de bom.
+
+9.2 O obturador da câmera
+.........................
+
+Esta câmera tem, internamente, uma pequena palheta que se fecha na frente do
+sensor de tempos em tempos, mostrando a ele uma superfície de temperatura
+conhecida. Isso serve para o sensor se recalibrar - o nome técnico é NUC, e o
+efeito é o mesmo de tarar uma balança, ou seja, zerá-la antes de pesar.
+
+Entre uma dessas recalibrações e a próxima, a leitura vai lentamente saindo do
+lugar. A câmera faz isso sozinha a cada 90 segundos aproximadamente, e essa
+deriva é pequena - mas é da mesma ordem de grandeza dos efeitos que estamos
+tentando medir.
+
+O risco é real: se as medições de perto forem feitas logo após uma
+recalibração e as de longe forem feitas pouco antes da seguinte, a deriva do
+sensor entra nos dados DISFARÇADA de efeito de distância. A calibração passa a
+medir as duas coisas somadas sem saber, e ninguém percebe olhando o gráfico.
+Por isso o programa permite forçar a recalibração pelo teclado e avisa quando
+já faz tempo demais desde a última.
+
+9.3 A roupa
+...........
+
+Este é o fator que mais altera o resultado, e é fácil de esquecer. O sistema
+mede a temperatura da SUPERFÍCIE. A pele exposta fica próxima de 33 graus; a
+superfície externa de um casaco, quase na temperatura ambiente, porque o
+casaco existe exatamente para impedir o calor de sair.
+
+Ou seja, a mesma pessoa, à mesma distância, produz leituras muito diferentes
+conforme esteja de manga curta ou de casaco. Como o sistema precisa funcionar
+no pior caso, a coleta registra qual roupa o voluntário usava em cada medição,
+e a análise mostra os dois separadamente.
+
+9.4 A pose
+..........
+
+O sistema usa o tamanho do retângulo como substituto da distância, o que só
+funciona se o alvo tiver sempre o mesmo formato. Uma pessoa deitada produz um
+retângulo bem diferente do de uma pessoa em pé à mesma distância.
+
+Como vítimas em situação de resgate raramente estão em pé, a coleta registra a
+pose de cada medição. Existe ainda um limite geométrico que vale conhecer:
+abaixo de cerca de 2,5 metros, uma pessoa em pé simplesmente não cabe na
+altura da imagem. O retângulo passa a conter só o tronco, e o tamanho dele
+deixa de indicar distância. Um dos gráficos serve exatamente para flagrar
+esses casos - e, de quebra, para pegar erros de leitura da trena.
+
+
+-------------------------------------------------------------------------------
+ 10. O QUE O SISTEMA NÃO CONSEGUE FAZER
+-------------------------------------------------------------------------------
+
+Esta seção existe porque um sistema de resgate que promete mais do que entrega
+é pior do que um sistema honesto sobre seus limites.
+
+10.1 A anotação de estado térmico não distingue "vivo" de "morto há pouco"
+.........................................................................
+
+Cada caixa aceita recebe uma anotação sobre o estado térmico do corpo: se ele
+ainda se destaca do ambiente ou se já se igualou a ele. É a informação que ajuda
+a ordenar a fila do resgate, e é preciso ser exato sobre o que ela significa.
+
+Um corpo humano leva HORAS para chegar à temperatura do ambiente. Nos
+primeiros trinta minutos, sua assinatura térmica é praticamente idêntica à de
+uma pessoa viva.
+
+Portanto, o que essa anotação realmente separa não é vida de morte. É:
+
+    corpo em DESEQUILÍBRIO térmico com o ambiente
+        contra
+    corpo em EQUILÍBRIO térmico com o ambiente
+
+Isso continua sendo útil num resgate - um corpo em equilíbrio ou está ali há
+muitas horas, ou não é um corpo. Mas a formulação correta é essa, e a decisão
+sobre uma vítima é da equipe de resgate: o papel do sistema é ordenar a fila,
+não fechar o caso.
+
+Vale registrar o que mudou em relação à versão anterior do projeto, porque é uma
+mudança de fundo. Antes, essa classificação era o produto do detector, e era ela
+que decidia a cor e a presença de cada caixa na tela. O problema disso é que uma
+informação sabidamente ambígua - um corpo em equilíbrio pode ser um cadáver, um
+manequim ou uma vítima hipotérmica - estava no comando da decisão de mostrar ou
+não mostrar alguém. Hoje ela é apenas uma anotação numa caixa que já foi aceita
+por outro critério, e não tem poder nenhum de apagar ninguém.
+
+10.2 Ele pode ser enganado por superfícies refletoras
+.....................................................
+
+Um espelho, um vidro ou uma superfície de inox refletem radiação
+infravermelha, do mesmo jeito que refletem luz visível. Uma pessoa refletida
+num espelho aparece para a câmera como se fosse uma segunda pessoa quente.
+
+Neste caso específico, quem protege o sistema é o YOLO: o reflexo em geral
+está deformado e não tem forma convincente de gente. É mais um exemplo de por
+que forma e temperatura são usadas juntas.
+
+10.3 Ele depende de acertar o regime do cômodo
+..............................................
+
+Toda a lógica se apoia em saber se o ambiente está abaixo ou acima da
+temperatura da pele. Se essa leitura estiver errada - por exemplo, se uma
+pessoa muito próxima dominar a imagem - o sistema pode inverter a lógica na
+hora errada. É por isso que a seção 9.1 recebeu tanta atenção, e por isso o
+sistema avisa em vermelho quando não consegue estimar o ambiente com
+confiança.
+
+10.4 A térmica não consegue derrubar uma forma muito convincente
+...............................................................
+
+Pela assimetria descrita em 4.3, uma caixa em que o YOLO tem confiança alta
+sobrevive mesmo com assinatura térmica ruim. Um manequim excepcionalmente
+convincente continua sendo marcado.
+
+Isso é escolha, não descuido: para derrubar esse caso, a térmica precisaria ter
+poder de veto sobre a forma, e aí ela também derrubaria a vítima em equilíbrio
+térmico - que produz exatamente a mesma leitura. Entre marcar um manequim e
+apagar um corpo, o sistema prefere marcar o manequim. Quem paga por essa escolha
+é a equipe, com uma ida em falso.
+
+
+10.5 Os candidatos térmicos produzem alarmes falsos
+...................................................
+
+A varredura da peça 4 da seção 4.3 aponta manchas quentes com forma e tamanho
+de corpo. Um cachorro, um motor sob uma lona, uma poça de água aquecida pelo sol
+com o formato errado - qualquer um deles pode virar candidato.
+
+De novo, é escolha. Um candidato custa um deslocamento do robô; uma vítima não
+apontada custa uma vida. Mas o custo é real e cresce em ambientes cheios de
+equipamento quente, e é por isso que candidatos aparecem numa cor própria e são
+rotulados como "aproximar", nunca como detecção. Eles não entram na contagem de
+pessoas encontradas.
+
+
+10.6 A combinação supõe que as duas evidências são independentes
+...............................................................
+
+A conta que junta forma e temperatura trata as duas como opiniões separadas
+sobre a mesma pergunta. Isso não é perfeitamente verdade: as duas saem da MESMA
+imagem, e uma pessoa mal resolvida a 12 metros tende a ser simultaneamente mal
+vista pelo YOLO e mal medida pela térmica.
+
+Quando duas evidências erram juntas, combiná-las como se fossem independentes
+faz o sistema ficar mais confiante do que deveria. O efeito existe, é maior nas
+distâncias grandes, e não está corrigido. Registrar isso é mais honesto do que
+apresentar o score como uma probabilidade bem calibrada - ele é uma ordenação
+útil, não uma probabilidade no sentido estrito.
+
+
+10.7 O que ele nunca vai poder fazer
+....................................
+
+Diagnosticar. O sistema não avalia sinais vitais, não estima há quanto tempo
+alguém está ali e não identifica ninguém. Ele indica onde olhar primeiro.
+
+
+-------------------------------------------------------------------------------
+ 11. GLOSSÁRIO
+-------------------------------------------------------------------------------
+
+  BBOX (bounding box)
+      O retângulo desenhado em volta de uma pessoa detectada. Seu tamanho é
+      usado pelo sistema como indicação de distância.
+
+  CALIBRAÇÃO
+      Medir o comportamento do instrumento em situações conhecidas para saber
+      interpretar suas leituras em situações desconhecidas.
+
+  CANDIDATO TÉRMICO
+      Mancha de calor com tamanho e forma compatíveis com um corpo, encontrada
+      pela varredura térmica FORA de qualquer caixa do YOLO. Não é uma detecção:
+      é um lugar para o robô ir olhar de perto.
+
+  CONFIANÇA
+      O número entre 0 e 1 que o YOLO entrega junto com cada retângulo,
+      indicando o quanto ele acredita naquela detecção. No sistema atual ela é
+      uma das duas entradas do score, não a decisão final.
+
+  CROSSOVER
+      A faixa de temperatura ambiente (33 a 36 graus) em que o ambiente está
+      igual à pele e ninguém tem contraste térmico. Zona cega do método, em que
+      a térmica se abstém (nota 0,5) e a forma decide sozinha.
+
+  DERRUBADA
+      Quando a assinatura térmica incompatível faz o score de uma caixa cair
+      abaixo do aceite, eliminando um falso positivo do YOLO. O oposto do
+      RESGATE.
+
+  ΔT (delta T)
+      Diferença entre a temperatura do alvo e a do ambiente. É a grandeza com
+      que todo o sistema trabalha, em vez da temperatura absoluta.
+
+  EFEITO SPOT-SIZE
+      A queda da temperatura lida conforme o alvo se afasta, causada pela
+      mistura de alvo e fundo dentro de um mesmo pixel. É o principal problema
+      que a calibração existe para resolver.
+
+  EMISSIVIDADE
+      O quanto uma superfície emite radiação infravermelha em comparação com
+      um emissor perfeito. Pele e roupa emitem muito bem (perto do máximo), o
+      que é uma boa notícia: significa que a leitura sobre pessoas é confiável
+      sem correções complicadas. Metais polidos emitem mal e refletem muito,
+      e é por isso que causam confusão.
+
+  ENVOLTÓRIA INFERIOR
+      A borda de baixo de uma nuvem de pontos num gráfico. Representa o pior
+      caso observado, e é dela que saem os limiares - usar a média deixaria
+      metade das pessoas de fora.
+
+  MEDIANA
+      O valor do meio de um conjunto de números ordenados. Mais robusta que a
+      média porque não é distorcida por poucos valores extremos.
+
+  NUC
+      A recalibração periódica interna da câmera, feita com um obturador.
+      Equivale a tarar uma balança. Entre uma e outra, a leitura deriva.
+
+  NEGATIVO
+      Amostra de calibração coletada sobre algo que NÃO é uma pessoa mas que o
+      YOLO marcou como se fosse. É o dado que mede a capacidade da térmica de
+      derrubar falso positivo; sem ele essa capacidade é suposta, não medida.
+
+  PERCENTIL
+      Uma forma de perguntar "qual valor deixa tantos por cento dos dados
+      abaixo de si". O percentil 99 é quase o maior valor do conjunto, mas
+      ignorando o extremo absoluto - o que protege contra um pixel defeituoso
+      isolado. O percentil 1 é o equivalente do lado frio.
+
+  PIXEL
+      Cada um dos pontos da imagem. Nesta câmera, cada pixel é um termômetro
+      independente, e são 19.200 deles.
+
+  PLAUSIBILIDADE
+      A nota entre 0 e 1 que a térmica dá a um candidato: o quanto a assinatura
+      medida se parece com a de uma pessoa daquele tamanho aparente. Nunca chega
+      a 0 nem a 1, e vale 0,5 (abstenção) no crossover.
+
+  PROXY
+      Um substituto usado em pesquisa quando o objeto real não está disponível
+      ou não pode ser usado. Aqui, um recipiente com água morna esfriando faz
+      as vezes de um corpo que não regula mais a própria temperatura.
+
+  REGIME
+      Qual das três situações térmicas o cômodo apresenta: frio (pessoa é
+      quente), quente (pessoa é fria) ou crossover (ninguém se destaca).
+
+  RESGATE
+      Quando a assinatura térmica sustenta uma detecção que o YOLO sozinho teria
+      descartado por confiança baixa. É o ganho principal do projeto e aparece
+      em amarelo na tela.
+
+  SAR (search and rescue)
+      Busca e salvamento.
+
+  SCORE FUNDIDO
+      O número final que decide se uma caixa aparece: a confiança do YOLO
+      atualizada pela plausibilidade térmica. É aceito acima de 0,5 - o mesmo
+      corte que a versão anterior aplicava só na confiança do YOLO.
+
+  VETO
+      A única eliminação dura do sistema: alvo quente demais para ser corpo
+      humano. Não passa pelo score, porque o argumento é de impossibilidade
+      física e não de pesagem de evidência (seção 4.5).
+
+  YOLO
+      O programa de inteligência artificial que reconhece formas de pessoas na
+      imagem e desenha os retângulos. Não enxerga temperatura.
+
+
+-------------------------------------------------------------------------------
+ 12. OS ARQUIVOS DO PROJETO
+-------------------------------------------------------------------------------
+
+  detect.py
+      O detector em si. Roda ao vivo com a câmera, funde forma e temperatura, e
+      mostra as caixas coloridas pela origem da detecção. A tecla 'd' liga o
+      modo de depuração, que revela o que foi derrubado e vetado.
+
+  calibracao_temperatura.py
+      O programa de coleta de dados. Usado com um voluntário e uma trena, e
+      também com os alvos negativos do passo 5 da seção 7.
+
+  analisar_calibracao.py
+      O programa de análise. Lê tudo que foi coletado, gera os nove gráficos e
+      calcula os números finais - tanto a régua de contraste quanto a força com
+      que a térmica empurra a decisão.
+
+  termica_comum.py
+      As contas usadas pelos três anteriores: a geometria do sensor, a régua de
+      contraste e a matemática da fusão. Existe para garantir que a coleta, a
+      análise e o detector calculem tudo exatamente do mesmo jeito - se
+      divergissem, os números calibrados não valeriam para o detector.
+
+===============================================================================
+ APÊNDICE A - A MATEMÁTICA DO SISTEMA
+===============================================================================
+
+ A partir daqui o documento muda de público. As seções 1 a 12 foram escritas
+ para quem está de fora do projeto; este apêndice é para quem vai mexer no
+ código, defender as escolhas numa banca ou refazer as contas.
+
+ Cada ferramenta matemática usada é apresentada do começo: primeiro o conceito,
+ depois a fórmula, depois a aplicação no nosso caso e, quando cabe, o número
+ concreto que ela produz aqui. Nenhum passo é pulado por ser "conhecido".
+
+ Todos os valores numéricos citados foram calculados com os parâmetros reais da
+ Thermal Master P1 (160x120, FOV 52°x39°) e conferem com o código.
+
+
+ SUMÁRIO DO APÊNDICE
+   A.1  Da contagem bruta à temperatura (radiometria)
+   A.2  Óptica: IFOV, modelo de lente, área x distância
+   A.3  Estatística da região: quantis, mediana, robustez
+   A.4  O modelo de mistura - a matemática do efeito spot-size
+   A.5  ΔT e propagação de erros
+   A.6  A régua de contraste (limiar_dt_vivo): forma funcional e alternativas
+   A.7  A envoltória inferior: quantis amostrais e bins logarítmicos
+   A.8  O ajuste: mínimos quadrados não-linear
+   A.9  A curva de resfriamento: lei de Newton
+   A.10 A fusão: plausibilidade, razão de chances e o veto
+   A.11 Erros de quantização geométrica
+   A.12 Todas as fórmulas em uma página
+
+
+-------------------------------------------------------------------------------
+ A.1  DA CONTAGEM BRUTA À TEMPERATURA
+-------------------------------------------------------------------------------
+
+A.1.1 O formato do número
+.........................
+
+A câmera entrega, por pixel, um inteiro sem sinal de 16 bits. Ele não é uma
+temperatura: é um número de ponto fixo. Ponto fixo significa que um inteiro
+representa um número fracionário por convenção - reserva-se uma quantidade fixa
+de bits para a parte fracionária, em vez de usar expoente como no ponto
+flutuante.
+
+Aqui a convenção é 6 bits fracionários (formato que se costuma escrever Q10.6:
+10 bits inteiros, 6 fracionários). Para ler o valor real, divide-se por 2^6:
+
+    T[K] = raw / 64
+
+E a conversão para Celsius é a definição da escala:
+
+    T[°C] = raw/64 - 273,15
+
+que é a função raw_to_celsius do driver.
+
+Três consequências que valem calcular:
+
+  PASSO DE QUANTIZAÇÃO
+      q = 1/64 = 0,015625 K
+      Ou seja, a câmera não consegue exprimir diferenças menores que ~16 mK.
+
+  FAIXA REPRESENTÁVEL
+      raw vai de 0 a 65535, então T vai de -273,15 °C a +750,83 °C.
+      Não há risco de estouro em nenhum cenário nosso.
+
+  RUÍDO INTRODUZIDO PELA QUANTIZAÇÃO
+      Quando se arredonda um valor contínuo para o múltiplo mais próximo de q,
+      o erro cometido é uma variável aleatória aproximadamente uniforme no
+      intervalo [-q/2, +q/2].
+
+      Aula rápida: a variância de uma distribuição uniforme em [a,b] é
+      (b-a)²/12. A demonstração é direta - a densidade é 1/(b-a) constante,
+      e integra-se (x - média)² vezes essa densidade no intervalo. Aqui
+      b-a = q, então:
+
+          Var = q²/12       e       σ_q = q/√12 = 0,0045 K
+
+      Compare com o NETD do sensor (Noise Equivalent Temperature Difference -
+      a menor diferença de temperatura que se distingue do ruído próprio),
+      tipicamente 50 mK em microbolômetros desta classe. O ruído de
+      quantização é cerca de 10 vezes menor.
+
+      Conclusão prática: a quantização NÃO é o fator limitante. Quem limita é
+      o ruído do sensor. Isso importa porque significa que não adianta buscar
+      precisão via aritmética - qualquer limiar nosso tem que ser folgado em
+      relação a ~50 mK, e todos são (o menor é DT_EQUILIBRIO = 0,5 °C, dez
+      vezes o NETD).
+
+
+A.1.2 Emissividade: a correção que decidimos não aplicar
+........................................................
+
+Um corpo real não emite como um corpo negro ideal. A emissividade ε (entre 0 e
+1) é a razão entre o que a superfície emite e o que um corpo negro emitiria na
+mesma temperatura. Além disso, o que não é emitido é refletido: uma superfície
+com emissividade ε reflete uma fração (1-ε) do ambiente ao redor.
+
+A radiância que chega ao sensor é, então, a soma das duas parcelas:
+
+    L_medida = ε·L(T_objeto) + (1-ε)·L(T_refletida)
+
+onde L(T) é a radiância de corpo negro na temperatura T e T_refletida é a
+temperatura do que está sendo refletido (tipicamente as paredes do cômodo).
+
+Para recuperar T_objeto, isola-se e inverte-se:
+
+    L(T_objeto) = [ L_medida - (1-ε)·L(T_refletida) ] / ε
+
+Precisamos de uma forma para L(T). A lei de Stefan-Boltzmann diz que a
+radiância TOTAL de um corpo negro vai com T⁴. Mas o sensor não vê o espectro
+todo - vê só a janela de 8 a 14 µm (o infravermelho de onda longa, LWIR).
+Integrando a lei de Planck só nessa banda, o expoente efetivo muda. Definindo
+
+    n = d(ln L)/d(ln T)
+
+que é o expoente da lei de potência local (se L ∝ T^n, então essa derivada
+logarítmica devolve exatamente n), obtém-se para a banda 8-14 µm:
+
+    T = 280 K  ->  n = 4,85
+    T = 293 K  ->  n = 4,67
+    T = 300 K  ->  n = 4,58
+    T = 315 K  ->  n = 4,39
+
+Ou seja, na nossa faixa de trabalho L ∝ T^4,6 aproximadamente - não T⁴. Com
+isso a correção fica:
+
+    T_objeto = [ ( T_medida^n - (1-ε)·T_refletida^n ) / ε ]^(1/n)
+
+Aplicando aos nossos números (pele com ε = 0,97, leitura de 32,9 °C):
+
+    parede a 19,9 °C  ->  T_objeto = 33,22 °C   (correção de +0,37 K)
+    parede a 39,9 °C  ->  T_objeto = 32,62 °C   (correção de -0,23 K)
+
+Ou seja: correções de poucos décimos de grau, com sinal dependendo de o
+ambiente estar mais frio ou mais quente que o alvo.
+
+POR QUE ISSO JUSTIFICA NÃO APLICAR A CORREÇÃO. Os limiares que estamos
+calibrando são da ordem de 1 a 3 °C. Uma correção de 0,3 K é cerca de dez
+vezes menor - está dentro da margem de segurança de 0,5 °C que já subtraímos
+da envoltória. Aplicá-la aumentaria a complexidade (precisaríamos estimar
+T_refletida) sem mudar nenhuma decisão do detector.
+
+A ressalva honesta é que isso vale para PELE (ε ≈ 0,98) e ROUPA (ε ≈ 0,95).
+Para metal polido, ε pode ser 0,1, e aí (1-ε) = 0,9 do sinal é reflexo puro -
+a leitura deixa de significar qualquer coisa sobre o objeto. É exatamente a
+matemática por trás do problema dos espelhos e do inox mencionado na seção
+10.2: não é um defeito da câmera, é a equação acima com ε pequeno.
+
+
+-------------------------------------------------------------------------------
+ A.2  ÓPTICA: IFOV, MODELO DE LENTE, ÁREA x DISTÂNCIA
+-------------------------------------------------------------------------------
+
+A.2.1 IFOV
+..........
+
+FOV (Field of View) é o ângulo total que a câmera enxerga. IFOV (Instantaneous
+Field of View) é o ângulo que UM pixel enxerga. Se os pixels dividem o campo
+igualmente:
+
+    IFOV = FOV_em_radianos / N_pixels
+
+Convertendo graus para radianos (multiplica-se por π/180):
+
+    horizontal:  rad(52°)/160 = 0,90757/160 = 5,6723e-3 rad/px
+    vertical:    rad(39°)/120 = 0,68068/120 = 5,6723e-3 rad/px
+
+Os dois valores coincidem até a quinta casa. Isso não é coincidência: é a
+confirmação de que o pixel é QUADRADO. Se não fossem iguais, teríamos que
+carregar dois IFOVs diferentes por toda a conta. Vale sempre fazer essa
+verificação ao adotar um FOV de catálogo - se der diferente, ou o pixel é
+retangular, ou o FOV informado está errado.
+
+Em unidades práticas: IFOV = 0,325° por pixel = 5,67 mrad.
+
+O miliradiano é conveniente porque, para ângulos pequenos, 1 mrad corresponde a
+1 mm a cada metro de distância. Então "5,67 mrad" já se lê diretamente como
+"5,67 mm por metro de distância":
+
+    a  2 m:  1 px cobre 11,3 mm
+    a  5 m:  1 px cobre 28,4 mm
+    a 10 m:  1 px cobre 56,7 mm
+
+que são os números da seção 5.
+
+
+A.2.2 A aproximação escondida: qual modelo de lente
+...................................................
+
+Aqui há uma sutileza que quase nunca é explicitada, e que vale a pena você
+conhecer porque afeta os números do projeto.
+
+Dizer que "cada pixel cobre um ângulo igual" é assumir um modelo específico de
+lente, chamado EQUIDISTANTE ou f-theta:
+
+    x_pixel = f·θ                    (modelo linear, o que o código usa)
+
+Só que a lente mais comum, a retilínea (modelo de câmera pinhole, que preserva
+retas), obedece:
+
+    x_pixel = f·tan(θ)               (modelo pinhole)
+
+Para ângulos pequenos os dois coincidem, porque a série de Taylor da tangente é
+
+    tan(θ) = θ + θ³/3 + 2θ⁵/15 + ...
+
+e o termo θ³/3 é desprezível quando θ é pequeno. Mas na BORDA do nosso quadro
+θ chega a 26° (metade de 52°), e aí θ³/3 já não é desprezível.
+
+Vamos quantificar. A distância focal em pixels implícita em cada modelo:
+
+    f_linear  = N/FOV_rad      = 160/0,90757  = 176,29 px
+    f_pinhole = (N/2)/tan(FOV/2) = 80/0,48773 = 164,02 px
+
+    razão f_linear/f_pinhole = 1,0748
+
+Isto é: o modelo linear que usamos SUPERESTIMA o tamanho em pixels de um alvo
+em cerca de 7,5%. Como área é tamanho ao quadrado:
+
+    erro em área = 1,0748² = 1,155,  ou seja, +15,5%
+
+Verificando em casos concretos (alvo centrado):
+
+    pessoa 1,70 m a  8 m:  pinhole 34,9 px  |  linear 37,3 px  (+7,1%)
+    pessoa 1,70 m a  3 m:  pinhole 92,9 px  |  linear 97,3 px  (+4,7%)
+    pessoa 0,45 m a  5 m:  pinhole 14,8 px  |  linear 15,9 px  (+7,4%)
+
+O QUE FAZER COM ISSO. Não é um erro a corrigir às cegas, porque não sabemos
+qual modelo a lente do P1 realmente segue - lentes de térmica frequentemente
+são projetadas mais perto do f-theta justamente para manter o IFOV uniforme.
+O que sabemos é que existe uma incerteza de até 15% na área prevista.
+
+E é aqui que o painel 4 do gráfico de calibração (área medida x distância,
+com a curva prevista sobreposta) ganha um segundo propósito: além de pegar
+erro de trena, ele MEDE empiricamente qual modelo a lente segue. Se os pontos
+medidos ficarem sistematicamente 13% abaixo da curva prevista (pois
+1/1,155 = 0,866), a lente é pinhole e basta trocar a constante. Se
+acompanharem a curva, o modelo linear está certo.
+
+Isso é um resultado que a calibração entrega de graça e que vale registrar no
+relatório.
+
+
+A.2.3 Área esperada em função da distância
+..........................................
+
+Um objeto de tamanho real S a uma distância d subtende um ângulo α ≈ S/d (de
+novo a aproximação de ângulo pequeno). Dividindo pelo ângulo de um pixel:
+
+    tamanho_em_pixels = α/IFOV = S/(d·IFOV)
+
+Aplicando às duas dimensões de uma pessoa em pé (altura h = 1,70 m, largura
+w = 0,45 m) e limitando pelas bordas do sensor (H = 120, W = 160):
+
+    A(d) = min( H, h/(d·IFOV) ) · min( W, w/(d·IFOV) )
+
+Os "min" representam o recorte: de muito perto o corpo não cabe no quadro, e a
+área para de crescer. É a função area_esperada_px.
+
+A distância em que a altura satura resolve-se igualando os dois termos:
+
+    h/(d·IFOV) = H     ->     d = h/(H·IFOV) = 1,70/(120·5,6723e-3) = 2,50 m
+
+que é a constante DISTANCIA_MIN_ENQUADRA_M. Abaixo disso o bbox é tronco, não
+corpo inteiro, e o tamanho dele deixa de codificar distância.
+
+
+A.2.4 A inversa: estimar distância a partir da área
+...................................................
+
+Na região NÃO saturada os dois "min" somem e a expressão fatora:
+
+    A = [h/(d·IFOV)]·[w/(d·IFOV)] = (h·w)/(d²·IFOV²)
+
+Chamando A_real = h·w = 1,70 × 0,45 = 0,765 m² (a área física da pessoa) e
+isolando d:
+
+    d = sqrt( A_real / (A · IFOV²) )
+
+que é distancia_estimada_m. Repare que ela só vale acima de 2,50 m - abaixo
+disso a fórmula original tinha os "min" ativos e não é mais inversível. O
+código documenta isso, e o efeito é visível: pedindo a distância de volta a
+partir da área prevista para 2 m, obtém-se 2,23 m, não 2,00 m.
+
+
+A.2.5 Por que os bins da análise são logarítmicos
+.................................................
+
+Aplicando logaritmo à relação da seção anterior:
+
+    ln A = ln(A_real/IFOV²) - 2·ln d
+
+Isto é uma reta em ln d, com inclinação exatamente -2. (Verificado
+numericamente sobre a região não saturada: a inclinação ajustada dá -2,0000.)
+
+A leitura disso é: passos IGUAIS em ln(A) correspondem a passos IGUAIS em
+ln(d). Ou seja, dividir a faixa de áreas em bins logarítmicos é o mesmo que
+dividi-la em bins logarítmicos de distância - que é a divisão natural do
+problema, já que a área varia de ~165 px (12 m) a ~10.000 px (1 m), mais de
+uma ordem de grandeza.
+
+Se usássemos bins LINEARES em área, as bordas ficariam em 165, 1800, 3400,
+5100, 6700, 8400, 10000. Todas as amostras de 4 a 12 metros cairiam no
+primeiro bin - justamente a faixa que determina o alcance máximo do sistema, o
+resultado mais importante da calibração. Por isso a função envoltoria_inferior
+usa np.geomspace.
+
+Coerentemente, o centro de cada bin é a MÉDIA GEOMÉTRICA das bordas,
+sqrt(a·b), e não a média aritmética (a+b)/2 - porque a média geométrica é o
+que corresponde ao ponto médio em escala logarítmica:
+
+    ln( sqrt(a·b) ) = [ln a + ln b]/2
+
+
+-------------------------------------------------------------------------------
+ A.3  ESTATÍSTICA DA REGIÃO: QUANTIS, MEDIANA, ROBUSTEZ
+-------------------------------------------------------------------------------
+
+A.3.1 Quantis
+.............
+
+Dado um conjunto de n números, ordene-os do menor para o maior. O quantil de
+ordem p (com p entre 0 e 1) é o valor que deixa uma fração p dos dados abaixo
+de si. O percentil é a mesma coisa com p escrito em porcentagem.
+
+A definição exata precisa de uma convenção de interpolação, porque em geral a
+posição p·(n-1) não cai num índice inteiro. O numpy usa, por padrão, a
+interpolação linear:
+
+    posição i = p·(n-1)
+    valor = x[floor(i)] + (i - floor(i))·( x[floor(i)+1] - x[floor(i)] )
+
+onde x é o vetor ordenado.
+
+Casos particulares úteis: p = 0,5 é a mediana; p = 0 é o mínimo; p = 1 é o
+máximo.
+
+
+A.3.2 Por que percentil 99 e não o máximo
+.........................................
+
+Para achar a temperatura do alvo no regime frio, queremos "o pixel mais
+quente". A escolha óbvia seria o máximo. Não usamos o máximo por uma razão de
+robustez:
+
+    O máximo é decidido por UM único pixel. Se esse pixel estiver defeituoso -
+    e microbolômetros têm pixels ruins de fábrica - a medida inteira vai junto,
+    sem aviso.
+
+O percentil 99 é "quase o máximo, mas ignorando o extremo". Ele sobrevive a
+um punhado de pixels ruins.
+
+MAS - e este é um ponto importante que a matemática revela e a intuição não -
+essa proteção DEPENDE DO TAMANHO DA CAIXA. Vejamos quantos pixels ficam acima
+do percentil 99 em função de n:
+
+    n = 165 px   (pessoa a 12 m)  ->  1,64 px acima
+    n = 240 px   (pessoa a 10 m)  ->  2,39 px acima
+    n = 375 px   (pessoa a  8 m)  ->  3,74 px acima
+    n = 1174 px  (pessoa a 4,5 m) -> 11,73 px acima
+    n = 3000 px                   -> 29,99 px acima
+    n = 10000 px (pessoa a 1,5 m) -> 99,99 px acima
+
+Leitura: numa caixa de 165 pixels, o percentil 99 é essencialmente o SEGUNDO
+maior valor. A proteção contra pixel defeituoso que julgávamos ter praticamente
+não existe ali - e "ali" é justamente a vítima distante, o caso mais difícil.
+
+Isso é uma limitação real do desenho atual, e ela tem duas saídas possíveis:
+
+  (a) Fazer o percentil depender de n, exigindo um número mínimo absoluto de
+      pixels acima do corte. Por exemplo, usar o percentil
+      p = 1 - k/n com k ≈ 5, o que garante sempre ~5 pixels descartados.
+
+  (b) Mapear os pixels defeituosos uma vez (eles são fixos) e mascará-los antes
+      de qualquer estatística. É a solução mais limpa e é o que câmeras
+      profissionais fazem internamente.
+
+Nenhuma das duas está implementada. Registrar isto é mais honesto do que
+deixar o número 99 parecendo uma escolha universalmente segura.
+
+
+A.3.3 Mediana e o conceito de ponto de ruptura
+..............................................
+
+Para a temperatura ambiente usamos a MEDIANA dos pixels de fundo, não a média.
+A justificativa formal chama-se PONTO DE RUPTURA (breakdown point): a fração de
+observações que podem ser arbitrariamente corrompidas antes que o estimador
+possa assumir qualquer valor.
+
+    média:   ponto de ruptura = 0
+             Basta UM valor ir para o infinito e a média vai junto.
+
+    mediana: ponto de ruptura = 0,5
+             É preciso corromper METADE dos dados para mover a mediana
+             arbitrariamente.
+
+No nosso caso o "valor corrompido" não é abstrato: é a lâmpada acesa, o cano
+quente, a janela fria. A mediana os ignora estruturalmente.
+
+O preço da robustez é eficiência. Para dados gaussianos, o erro-padrão de cada
+estimador é:
+
+    erro-padrão da média    = σ/√n
+    erro-padrão da mediana  = sqrt(π/2)·σ/√n = 1,2533·σ/√n
+
+A mediana é 25% menos eficiente - precisa de ~57% mais amostras para a mesma
+precisão. Aqui isso é irrelevante, porque n é enorme. Com os ~15.000 pixels de
+fundo que sobram após mascarar uma pessoa, e σ = 50 mK:
+
+    erro-padrão da mediana = 1,2533 · 0,05/√15000 = 0,5 mK
+
+Meio milikelvin. A incerteza estatística da temperatura ambiente é
+completamente desprezível frente a qualquer limiar nosso. O que pode dar errado
+na estimativa do ambiente não é ruído - é VIÉS, ou seja, medir a coisa errada
+(a própria pessoa), que é exatamente o problema tratado na seção 9.1.
+
+
+-------------------------------------------------------------------------------
+ A.4  O MODELO DE MISTURA - A MATEMÁTICA DO EFEITO SPOT-SIZE
+-------------------------------------------------------------------------------
+
+Esta é a seção central do apêndice, porque é a que justifica a calibração
+existir.
+
+A.4.1 Fator de preenchimento
+............................
+
+Considere um pixel que enxerga um pedaço de cena contendo parte do alvo e parte
+do fundo. Defina:
+
+    f = (área do alvo dentro do pixel) / (área total do pixel)
+
+f é o FATOR DE PREENCHIMENTO (fill factor), entre 0 e 1. f = 1 é um pixel que
+só vê alvo; f = 0 é um pixel que só vê fundo.
+
+O detector não mede temperatura: mede ENERGIA que chega. A energia é aditiva -
+o pixel simplesmente soma as contribuições das duas partes, ponderadas pela
+área que cada uma ocupa:
+
+    L_medida = f·L(T_alvo) + (1-f)·L(T_fundo)
+
+Note bem: a mistura é LINEAR EM RADIÂNCIA. Não em temperatura. Este detalhe
+importa e será tratado em A.4.3.
+
+
+A.4.2 Linearizando: o resultado que usamos
+..........................................
+
+A câmera converte L_medida de volta em temperatura invertendo a curva de
+calibração. Se as duas temperaturas envolvidas forem próximas, podemos
+linearizar L em torno de T_fundo. Expandindo em série de Taylor de 1ª ordem:
+
+    L(T_alvo) ≈ L(T_fundo) + (dL/dT)·(T_alvo - T_fundo)
+
+Substituindo na mistura:
+
+    L_medida ≈ L(T_fundo) + f·(dL/dT)·(T_alvo - T_fundo)
+
+E convertendo de volta (dividindo pela mesma derivada):
+
+    T_medida ≈ T_fundo + f·(T_alvo - T_fundo)
+
+Ou, em termos do contraste que é a grandeza do projeto:
+
+    ΔT_medido = f · ΔT_verdadeiro                              (*)
+
+ESTA É A EQUAÇÃO FUNDAMENTAL DO PROBLEMA. Ela diz que o contraste que a câmera
+reporta é o contraste real MULTIPLICADO pelo fator de preenchimento. Como f
+cai conforme o alvo se afasta, o contraste medido cai junto - e nenhuma
+aritmética posterior recupera a informação perdida, porque a soma já foi feita
+dentro do pixel.
+
+É a formalização exata da analogia da mistura de tintas da seção 5.
+
+
+A.4.3 O erro de convexidade (e por que ele é aceitável)
+.......................................................
+
+A passagem de A.4.1 para A.4.2 usou uma linearização. Vale medir o quanto se
+perde com ela.
+
+L é uma função CONVEXA de T (cresce como T^4,6 na nossa banda). Pela
+desigualdade de Jensen, para uma função convexa a média das imagens é MAIOR que
+a imagem da média:
+
+    média[ L(T) ]  ≥  L( média[T] )
+
+Traduzindo: ao misturar radiâncias e converter de volta, obtém-se uma
+temperatura um pouco MAIOR do que a média linear das temperaturas.
+
+Quantificando com a banda real de 8-14 µm, para f = 0,5, alvo a 306 K (32,9 °C)
+e fundo a 293 K (19,9 °C):
+
+    média linear em temperatura           = 299,50 K
+    resultado correto (via radiância)     = 299,69 K
+    erro da linearização                  = +0,19 K
+
+Cerca de dois décimos de grau, num caso de contraste alto (13 K) e mistura
+máxima (f = 0,5, o pior caso, pois é onde os dois termos mais competem).
+
+Como os limiares que estamos calibrando são de 1 a 3 °C e a margem de segurança
+já é 0,5 °C, um erro de 0,19 K não muda decisão nenhuma. A linearização está
+justificada - mas agora está justificada com número, não por hábito.
+
+
+A.4.4 Como f se relaciona com a área do bbox
+............................................
+
+A equação (*) é exata mas inútil sozinha: não temos como medir f em campo. O
+que temos é a área do bbox. Precisamos, então, de um modelo relacionando os
+dois.
+
+Um raciocínio geométrico razoável: o borramento óptico (descrito pela PSF,
+Point Spread Function - a mancha que um ponto ideal produz na imagem) contamina
+uma faixa de largura b nas BORDAS do alvo. Se o alvo tem lado linear L pixels:
+
+    área total          ≈ L²
+    área contaminada    ≈ perímetro × b ≈ 4·L·b
+    fração "pura"       ≈ 1 - 4b/L
+
+E como L = sqrt(A):
+
+    f(A) ≈ 1 - c/sqrt(A)          com c = 4b                   (modelo I)
+
+O modelo que o código usa é outro:
+
+    f(A) ≈ min(1, A/A_ref)^p       com p ≈ 0,5                  (modelo II)
+
+HONESTIDADE SOBRE ISSO: o modelo II não é derivado de primeiros princípios. É
+uma família fenomenológica escolhida por conveniência - é monótona, satura em
+1, tem poucos parâmetros e cobre bem o comportamento esperado. O modelo I é o
+fisicamente motivado.
+
+Os dois são distinguíveis pelos dados: têm curvatura diferente na região de
+alvo pequeno, que é onde há mais pontos experimentais se a coleta cobrir as
+distâncias grandes. Ajustar os dois e comparar os resíduos é um resultado
+publicável e de baixo custo - só precisa dos mesmos dados.
+
+Registro claro: hoje o expoente p = 0,5 é um chute com forma plausível, e a
+calibração o ajusta. Não afirme numa banca que ele decorre da física; afirme
+que é uma família de curvas cujo parâmetro foi medido.
+
+
+-------------------------------------------------------------------------------
+ A.5  ΔT E PROPAGAÇÃO DE ERROS
+-------------------------------------------------------------------------------
+
+A.5.1 Por que a subtração cancela o viés
+........................................
+
+Modele cada leitura de temperatura como três partes:
+
+    T_medida = T_verdadeira + b + ε
+
+onde b é um VIÉS sistemático (offset de calibração, deriva desde o último NUC -
+o mesmo para todos os pixels do frame) e ε é o ruído aleatório do pixel
+(independente entre pixels).
+
+Calculando o contraste:
+
+    ΔT = T_alvo,medida - T_ambiente,medida
+       = (T_alvo,v + b + ε₁) - (T_amb,v + b + ε₂)
+       = (T_alvo,v - T_amb,v) + (ε₁ - ε₂)
+
+O b desapareceu. EXATAMENTE, não aproximadamente. É a razão formal pela qual
+todo o sistema trabalha em ΔT: qualquer erro comum às duas leituras se cancela
+na subtração.
+
+Isso cobre justamente o problema descrito em 9.2: a deriva entre NUCs afeta o
+frame inteiro por igual, logo é um b, logo some no ΔT. O motivo de ainda assim
+controlarmos o NUC é que a deriva não é perfeitamente uniforme entre pixels -
+a parte não uniforme não cancela.
+
+
+A.5.2 O que NÃO cancela: a variância
+....................................
+
+A regra geral para a variância de uma diferença é:
+
+    Var(X - Y) = Var(X) + Var(Y) - 2·Cov(X,Y)
+
+Aula rápida sobre covariância: Cov(X,Y) = E[(X - E[X])·(Y - E[Y])] mede se as
+duas grandezas erram JUNTAS. Positiva significa "quando uma sobe, a outra
+tende a subir". O termo -2·Cov na fórmula é o que formaliza o cancelamento da
+seção anterior: quanto mais correlacionados os erros, MENOR a variância da
+diferença.
+
+No nosso caso:
+
+    Var(T_alvo) - vem do percentil de poucos pixels: relativamente alta.
+    Var(T_amb)  - vem da mediana de ~15.000 pixels: 0,5 mK, desprezível (A.3.3)
+    Cov         - positiva, pela deriva compartilhada.
+
+Conclusão: a incerteza do ΔT é dominada quase inteiramente pela estimativa do
+ALVO. Melhorar a estimativa do ambiente não traria ganho; melhorar a do alvo
+(mais pixels, ou seja, chegar mais perto) traria.
+
+É a justificativa quantitativa para o robô aproximar-se antes de concluir
+qualquer coisa sobre um alvo pequeno - tanto no caso de um candidato térmico
+(seção 4.3, peça 4) quanto no da anotação de estado térmico (10.1), que só é
+emitida com confiança quando o alvo está bem resolvido.
+
+
+-------------------------------------------------------------------------------
+ A.6  A RÉGUA DE CONTRASTE (limiar_dt_vivo)
+-------------------------------------------------------------------------------
+
+A.6.1 A forma funcional
+.......................
+
+O contraste que uma PESSOA produz num alvo de área A - a régua contra a qual a
+plausibilidade é medida em A.10 - é:
+
+    limiar(A) = dt_longe + (dt_perto - dt_longe) · r(A)
+
+    onde   r(A) = [ min(1, A/A_ref) ]^p          e p = EXPOENTE_LIMIAR
+
+Verificação das propriedades (é isso que se checa ao propor uma forma
+funcional):
+
+    A -> 0      =>  r -> 0  =>  limiar -> dt_longe        (piso)
+    A >= A_ref  =>  r  = 1  =>  limiar  = dt_perto        (teto, saturado)
+    monotonicidade: r é crescente em A se p > 0; logo o limiar é crescente
+                    desde que dt_perto > dt_longe
+    continuidade:   r é contínua em A = A_ref, pois min(1,·) cola os dois
+                    ramos no valor 1
+
+Com os valores atuais (dt_perto = 3, dt_longe = 1, A_ref = 1174, p = 0,5):
+
+    A =    0  ->  1,00
+    A =  100  ->  1,58
+    A =  500  ->  2,31
+    A = 1174  ->  3,00
+    A = 5000  ->  3,00
+
+A.6.2 Por que o expoente é menor que 1
+......................................
+
+Com p < 1 a curva é CÔNCAVA: sobe rápido no início e achata perto da saturação.
+Isso espelha o comportamento do fator de preenchimento - assim que o alvo
+começa a resolver, ganha-se muito contraste; perto de estar cheio, ganha-se
+pouco.
+
+Formalmente, a derivada é
+
+    d(limiar)/dA = (dt_perto - dt_longe)·p·A^(p-1)/A_ref^p
+
+e com p - 1 < 0 essa derivada decresce com A, que é a definição de concavidade.
+
+A.6.3 Sensibilidade a erro na área
+..................................
+
+Quanto um erro na área estraga o limiar? A quantidade certa para isso é a
+derivada logarítmica, d(limiar)/d(ln A) = A·d(limiar)/dA, que dá a variação do
+limiar por variação RELATIVA de área:
+
+    A =  237  ->  +0,449 °C por 100% de erro de área
+    A = 1172  ->  +0,591 °C por 100% de erro de área
+    A = 3000  ->   0,000  (saturado, insensível)
+
+Traduzindo para o que acontece na prática: um erro de 10% na área desloca o
+limiar em menos de 0,06 °C. Comparado com a margem de segurança de 0,5 °C, é
+irrelevante.
+
+Esta é uma boa notícia importante e vale enunciá-la: o sistema é ROBUSTO a
+erros moderados na estimativa de área. O que ele não tolera é erro na
+temperatura.
+
+
+-------------------------------------------------------------------------------
+ A.7  A ENVOLTÓRIA INFERIOR
+-------------------------------------------------------------------------------
+
+A.7.1 O que a envoltória é, estatisticamente
+............................................
+
+Para cada bin de área, calculamos o percentil 10 dos |ΔT| observados. A
+interpretação: estamos estimando o valor abaixo do qual caem 10% das pessoas
+VIVAS naquela faixa de resolução.
+
+Usar esse valor como régua significa que, por construção, cerca de 10% das
+pessoas reais produzirão contraste abaixo dela e receberão plausibilidade menor
+que o máximo. Repare que a consequência disso mudou de natureza em relação ao
+sistema anterior: antes, ficar abaixo do limiar mudava a CLASSE atribuída à
+pessoa; hoje apenas reduz o quanto a térmica empurra a decisão a favor dela. Se
+a forma do YOLO for boa, a detecção passa do mesmo jeito.
+
+Ou seja, o custo de errar a régua para baixo caiu bastante - o que é uma
+propriedade desejável de qualquer sistema em que um parâmetro estimado com pouco
+dado alimenta uma decisão crítica.
+
+Subtrair a MARGEM_SEGURANCA de 0,5 °C empurra a régua para baixo e reduz ainda
+mais essa taxa. Quanto exatamente ela cai depende da densidade dos dados na
+região - o que nos leva ao ponto seguinte.
+
+A.7.2 Quão confiável é um percentil amostral
+............................................
+
+Este é o ponto mais frequentemente ignorado em calibrações, e o que mais pode
+comprometer a nossa.
+
+Teorema (variância assintótica de um quantil amostral): se x_p é o quantil
+verdadeiro de ordem p e f é a densidade de probabilidade avaliada nesse ponto,
+o quantil estimado a partir de n amostras tem variância aproximada
+
+    Var( quantil estimado ) ≈ p·(1-p) / ( n · f(x_p)² )
+
+Três leituras importantes dessa fórmula:
+
+  (1) A variância cai com 1/n. Para METADE do erro, quadruplique as amostras.
+
+  (2) O f(x_p)² no denominador é traiçoeiro: nas CAUDAS da distribuição a
+      densidade f é pequena, então a variância EXPLODE. Estimar um percentil 10
+      é intrinsecamente muito mais ruidoso que estimar uma mediana.
+
+  (3) Com n pequeno, a estimativa é essencialmente inútil. O código usa
+      MIN_POR_BIN = 3, que é o mínimo absoluto para o bin existir - não o
+      mínimo para o número ser confiável.
+
+RECOMENDAÇÃO CONCRETA que sai daqui: mire de 20 a 30 amostras POR BIN, não por
+distância. Como são 6 bins, isso significa da ordem de 150 amostras de pessoa
+viva no total, distribuídas de forma a encher todos os bins - e lembrando que
+os bins são logarítmicos, o que exige atenção especial às distâncias grandes,
+onde a área varia devagar.
+
+
+-------------------------------------------------------------------------------
+ A.8  O AJUSTE: MÍNIMOS QUADRADOS NÃO-LINEAR
+-------------------------------------------------------------------------------
+
+A.8.1 O problema
+................
+
+Temos os pontos da envoltória (A_i, y_i) e o modelo g(A; θ) com o vetor de
+parâmetros θ = (dt_perto, dt_longe, p). Queremos o θ que minimiza a soma dos
+quadrados dos resíduos:
+
+    S(θ) = Σ_i [ y_i - g(A_i; θ) ]²
+
+Por que os QUADRADOS, e não os módulos? Duas razões: (a) sob a hipótese de
+ruído gaussiano independente, minimizar a soma dos quadrados é exatamente o
+estimador de máxima verossimilhança; (b) o quadrado é diferenciável em toda
+parte, o que permite usar derivadas para achar o mínimo - o módulo tem um bico
+em zero.
+
+A.8.2 Por que é "não-linear" e o que isso muda
+..............................................
+
+Se g fosse linear nos parâmetros, o mínimo teria fórmula fechada (as equações
+normais da regressão linear). O nosso g tem o parâmetro p num EXPOENTE, o que
+o torna não-linear em θ. Consequências:
+
+    - não há solução fechada; é preciso iterar
+    - a superfície S(θ) pode ter mínimos locais
+    - o resultado passa a depender do CHUTE INICIAL
+
+A.8.3 Gauss-Newton e Levenberg-Marquardt
+........................................
+
+A ideia do método de Gauss-Newton: perto de uma estimativa atual θ_k, aproxime
+g por sua linearização (série de Taylor de 1ª ordem em θ):
+
+    g(A; θ_k + δ) ≈ g(A; θ_k) + J·δ
+
+onde J é a matriz JACOBIANA - a matriz das derivadas parciais de g em relação a
+cada parâmetro, avaliada em cada ponto de dados. Cada linha é um ponto, cada
+coluna é um parâmetro.
+
+Com essa aproximação o problema vira um mínimos quadrados LINEAR em δ, cuja
+solução é dada pelas equações normais:
+
+    (Jᵀ J) δ = Jᵀ r          onde r é o vetor de resíduos atuais
+
+Resolve-se para δ, atualiza-se θ_{k+1} = θ_k + δ, e repete-se.
+
+O problema do Gauss-Newton puro é que ele pode dar passos grandes demais e
+divergir, especialmente se JᵀJ for mal condicionada. LEVENBERG-MARQUARDT
+conserta isso adicionando um termo de amortecimento λ:
+
+    (Jᵀ J + λ·I) δ = Jᵀ r
+
+O λ interpola continuamente entre dois comportamentos:
+
+    λ -> 0    : recupera Gauss-Newton (passos grandes, convergência rápida
+                perto do mínimo)
+    λ grande  : o termo λI domina, e δ ≈ (1/λ)·Jᵀr, que é a direção do
+                gradiente descendente com passo pequeno (lento, mas seguro)
+
+O algoritmo ajusta λ automaticamente a cada iteração: se o passo melhorou S,
+diminui λ (fica mais agressivo); se piorou, aumenta λ (fica mais conservador).
+
+A.8.4 O que o nosso código faz especificamente
+..............................................
+
+    curve_fit(modelo_limiar, centros, dt_env,
+              p0=[max(dt_env), min(dt_env), 0.5],
+              bounds=([0,0,0.1], [30,30,3]), maxfev=20000)
+
+  - p0 é o chute inicial. Escolhemos o maior e o menor valor da envoltória
+    para dt_perto e dt_longe, e 0,5 para o expoente. São chutes informados,
+    não arbitrários - e isso importa por causa de A.8.2.
+
+  - bounds impõe restrições de caixa. Isso muda o algoritmo: o scipy usa
+    Levenberg-Marquardt apenas no caso SEM restrições; com bounds ele passa
+    para o TRF (Trust Region Reflective), que resolve subproblemas dentro de
+    uma região de confiança e reflete os passos que tentam sair da caixa.
+
+  - as restrições não são decorativas. O limite inferior de 0,1 no expoente
+    impede que o ajuste colapse para p = 0 (curva constante), e os limites em
+    0 nos dois ΔT impedem limiares negativos, que não teriam sentido físico.
+
+  - maxfev limita o número de avaliações da função antes de desistir.
+
+A.8.5 O teste de sanidade que o código faz
+..........................................
+
+Depois de ajustar, verificamos se dt_perto > dt_longe. Se falhar, o ajuste diz
+que o contraste NÃO cresce com a resolução do alvo - o que contradiz a equação
+(*) da seção A.4.2.
+
+Quando um ajuste contradiz a física, a conclusão correta não é "a física está
+errada": é que alguma variável não foi controlada na coleta (roupa misturada,
+pose misturada, NUC derivando) ou que a faixa de distâncias foi estreita
+demais para o efeito aparecer. Por isso o código imprime um aviso explícito
+mandando NÃO colar os números antes de investigar.
+
+
+-------------------------------------------------------------------------------
+ A.9  A CURVA DE RESFRIAMENTO
+-------------------------------------------------------------------------------
+
+A.9.1 Lei de Newton do resfriamento
+...................................
+
+A hipótese: a taxa de perda de calor de um corpo é proporcional à diferença de
+temperatura entre ele e o ambiente. Em forma de equação diferencial:
+
+    dT/dt = -k·( T - T_amb )
+
+com k > 0 constante. O sinal negativo diz que se o corpo está mais quente que o
+ambiente ele esfria, e vice-versa.
+
+Resolvendo por separação de variáveis. Defina θ = T - T_amb (o nosso ΔT!).
+Como T_amb é constante, dθ/dt = dT/dt, e a equação vira:
+
+    dθ/dt = -k·θ
+    dθ/θ  = -k·dt
+
+Integrando ambos os lados:
+
+    ln θ = -k·t + C
+    θ(t) = θ₀·e^(-k·t)
+
+Voltando à temperatura, e definindo a CONSTANTE DE TEMPO τ = 1/k:
+
+    T(t) = T_amb + ΔT₀ · e^(-t/τ)
+
+    ou, em termos do que medimos:   |ΔT|(t) = |ΔT₀| · e^(-t/τ)
+
+Interpretação de τ: é o tempo para o contraste cair a 1/e ≈ 36,8% do valor
+inicial. Após 3τ resta 5%; após 5τ, menos de 1%.
+
+A.9.2 Como ajustar τ (o truque do logaritmo)
+............................................
+
+Ajustar uma exponencial diretamente exigiria o maquinário não-linear da seção
+A.8. Mas há um atalho clássico: tome o logaritmo dos dois lados.
+
+    ln |ΔT|(t) = ln|ΔT₀| - t/τ
+
+Isto é uma RETA em t, com:
+
+    coeficiente angular  = -1/τ      ->      τ = -1/(coef. angular)
+    coeficiente linear   = ln|ΔT₀|   ->      |ΔT₀| = e^(coef. linear)
+
+E ajustar uma reta tem solução fechada (regressão linear simples), sem
+iteração, sem chute inicial, sem risco de mínimo local. Em código, é uma linha:
+
+    b, a = np.polyfit(t, np.log(dt), 1)
+    tau = -1/b ;  dt0 = np.exp(a)
+
+Testei isso nos dados sintéticos em que injetei τ = 1500 s e ΔT₀ = 12 °C. O
+ajuste recuperou:
+
+    τ = 1531 s (25,5 min)  e  ΔT₀ = 11,71 °C
+
+Erro de 2% no τ, com ruído presente. O método funciona.
+
+RESSALVA sobre o truque do log: ao logaritmar, o ruído deixa de ser uniforme -
+erros nos valores pequenos (cauda da curva, ΔT já perto de zero) passam a pesar
+MAIS do que deveriam, porque o logaritmo amplifica variações relativas. Para
+um ajuste rigoroso, usa-se regressão ponderada ou ajusta-se a exponencial
+diretamente. Para escolher DT_EQUILIBRIO, a precisão do método simples basta -
+ainda mais agora que esse parâmetro alimenta apenas a anotação secundária de
+estado térmico, e não a decisão de detectar.
+
+A.9.3 A hipótese escondida (e por que ela não vale bem para um corpo)
+.....................................................................
+
+A lei de Newton pressupõe que o corpo tem temperatura UNIFORME - ou seja, que
+o calor se redistribui internamente muito mais rápido do que escapa para fora.
+Essa hipótese chama-se CAPACITÂNCIA CONCENTRADA (lumped capacitance) e mede-se
+pelo NÚMERO DE BIOT:
+
+    Bi = h·L_c / k_corpo
+
+onde h é o coeficiente de transferência de calor por convecção, L_c um
+comprimento característico do corpo e k_corpo a condutividade térmica interna.
+A hipótese vale quando Bi << 1 (convencionalmente Bi < 0,1).
+
+Para um corpo humano, k é baixo (tecido é mau condutor) e L_c é grande
+(dezenas de centímetros). O Bi resultante NÃO é pequeno. Consequência física:
+a superfície esfria bem antes do núcleo, e o resfriamento real não é uma
+exponencial única - é uma soma de exponenciais com constantes de tempo
+diferentes. É por isso que curvas reais de resfriamento post-mortem
+(as chamadas curvas de Henssge, usadas em medicina legal) têm um PLATÔ inicial
+antes de começarem a cair.
+
+O QUE ISSO SIGNIFICA PARA NÓS. Duas coisas, e ambas devem constar do relatório:
+
+  (1) O proxy de água tem Bi bem menor que um corpo humano (água convecciona
+      internamente), então ele obedece Newton melhor do que o objeto que
+      pretende representar. A curva que medimos é uma APROXIMAÇÃO OTIMISTA da
+      real.
+
+  (2) Como a câmera mede SUPERFÍCIE, e a superfície é justamente a parte que
+      responde rápido, o efeito é menos grave do que seria se medíssemos
+      temperatura interna. Mas o platô inicial é real, e ele é mais uma razão
+      física - além da já dada na seção 10.1 - para o sistema não distinguir
+      óbito recente de pessoa viva.
+
+
+-------------------------------------------------------------------------------
+ A.10  A FUSÃO: PLAUSIBILIDADE, RAZÃO DE CHANCES E O VETO
+-------------------------------------------------------------------------------
+
+Esta seção formaliza a seção 4.3. O sistema tem duas camadas com naturezas
+matemáticas diferentes, e a separação entre elas é deliberada:
+
+    camada 1 (VETO)   - lógica booleana sobre um argumento físico
+    camada 2 (FUSÃO)  - atualização probabilística de uma crença
+
+DEFINIÇÕES COMUNS
+    ΔT      = T_alvo - T_amb
+    L(A)    = limiar_dt_vivo(A)                       [seção A.6]
+    A_ref   = area_esperada_px(4,5 m) = 1174 px       [seção A.2.3]
+    regime  = frio      se T_amb < 33
+              quente    se T_amb > 36
+              crossover caso contrário
+
+A.10.1 Contraste direcionado
+............................
+
+O sinal esperado do contraste depende do regime. Em vez de escrever dois ramos
+espelhados, define-se
+
+    s(regime) = +1 (frio) | -1 (quente) | 0 (crossover)
+
+    ΔT_dir = ΔT · s(regime)
+
+ΔT_dir positivo significa "contraste no sentido em que uma pessoa deveria
+estar". Com isso, a MESMA régua L(A) e a MESMA fórmula de plausibilidade servem
+aos dois regimes, sem duplicação de código nem de argumento. É a simplificação
+que a versão por partes não tinha.
+
+A.10.2 A camada 1: o veto
+.........................
+
+    frio      : T_alvo > 40 °C          -> vetado
+    quente    : ΔT > 5 °C               -> vetado
+    crossover : T_alvo > 40 °C          -> vetado
+
+A ASSIMETRIA ENTRE OS RAMOS, formalmente. No ramo frio a condição é sobre o
+valor ABSOLUTO de T_alvo; no quente, sobre ΔT. Não é inconsistência - cada
+regime admite um argumento diferente:
+
+    frio:    T_amb < 33 e T_alvo > 40  =>  o alvo excede o ambiente em mais de
+             7 K de forma sustentada. Nenhuma superfície passiva faz isso; logo
+             há geração interna de calor.
+
+    quente:  T_amb pode ser 45. Aí "T_alvo > 40" é satisfeito por QUALQUER
+             coisa no cômodo, inclusive um cadáver equilibrado, e o teste perde
+             poder discriminante completamente. O que continua válido é o
+             princípio termodinâmico: em regime estacionário um corpo passivo
+             tende ao equilíbrio com o ambiente e não o ultrapassa. Logo
+             ΔT > 0 sustentado implica fonte.
+
+O ramo frio TAMBÉM poderia usar o critério relativo - mas com um limiar
+completamente diferente, porque lá uma pessoa viva tem ΔT de +13 K, o que a
+faria ser vetada por qualquer margem razoável. Usar o mesmo número nos dois
+regimes é que seria o erro.
+
+Por que isto é um veto booleano e não uma evidência a ser pesada: a proposição
+"pele humana não excede o teto fisiológico" não é uma tendência estatística
+sobre a qual se acumula crença - é uma restrição. Modelá-la como plausibilidade
+baixa daria a ela um poder que depende da confiança do YOLO, e um radiador
+detectado com confiança 0,95 sobreviveria. Modelá-la como veto elimina esse
+caso, ao custo de perder qualquer alvo humano que exceda 40 °C - o que, pela
+fisiologia, não existe.
+
+A.10.3 A camada 2: a plausibilidade
+...................................
+
+Define-se a razão de contraste, adimensional:
+
+    ρ = ΔT_dir / L(A)
+
+ρ = 1 significa "produziu exatamente o contraste esperado de uma pessoa deste
+tamanho aparente". Normalizar por L(A) é o que remove a distância da conta: sem
+isso, a comparação entre uma pessoa a 2 m e outra a 10 m mediria spot-size, não
+plausibilidade. É a formalização do argumento da seção 5.
+
+A plausibilidade é uma interpolação suave entre dois extremos:
+
+    p(ρ) = p_min + (p_max - p_min) · S(ρ)
+
+    onde  S(x) = 0                se x <= 0
+                 3x² - 2x³        se 0 < x < 1
+                 1                se x >= 1
+
+S é o SMOOTHSTEP, o polinômio cúbico de Hermite que interpola de 0 a 1 com
+derivada nula nas duas pontas:
+
+    S(0) = 0,  S(1) = 1,  S'(0) = S'(1) = 0
+
+Verificando: S'(x) = 6x - 6x² = 6x(1-x), que de fato zera em 0 e em 1, e é
+positiva no meio - logo S é monótona crescente, como se exige.
+
+POR QUE SUAVE E NÃO UM DEGRAU. O mesmo argumento que motivou a curva contínua
+de limiar em A.6: com um degrau, dois alvos separados por um décimo de grau
+receberiam plausibilidades muito diferentes, e a decisão passaria a depender do
+sinal do ruído do sensor. A derivada nula nas pontas garante ainda que a
+sensibilidade da decisão a erro de medida seja MÍNIMA exatamente nas duas
+regiões em que o dado é mais ambíguo (ρ perto de 0 e ρ perto de 1).
+
+No crossover, p ≡ 0,5 por definição, e a razão fica em A.10.4.
+
+A.10.4 A fusão em razão de chances
+..................................
+
+A CHANCE (odds) de um evento de probabilidade P é
+
+    O = P / (1 - P)
+
+e a transformação inversa é P = O/(1+O). A chance é a forma natural de combinar
+evidências porque, sob independência condicional, evidências se acumulam por
+MULTIPLICAÇÃO de chances - enquanto probabilidades não se multiplicam.
+
+O sistema calcula:
+
+    O_final = O_yolo · [ p / (1 - p) ]
+
+    score = O_final / (1 + O_final)
+
+O fator p/(1-p) é a RAZÃO DE VEROSSIMILHANÇA da evidência térmica. Vale
+enunciar a leitura bayesiana explícita: tratar p como P(pessoa | térmica) sob
+prior 50/50 faz p/(1-p) ser exatamente a razão de verossimilhança, e a fórmula
+acima é a regra de Bayes escrita em chances.
+
+Isso tem uma consequência prática importante para a calibração: os parâmetros
+p_min e p_max devem ser estimados como PROPORÇÕES em amostras balanceadas de
+positivos e negativos - que é exatamente o que analisar_calibracao.py faz, e a
+razão pela qual ele avisa quando a coleta está desequilibrada.
+
+VERIFICAÇÃO DOS TRÊS CASOS
+
+    p = 0,5   ->  p/(1-p) = 1   ->  O_final = O_yolo   ->  score = conf
+                  A abstenção é EXATA, não aproximada. É o que garante que o
+                  crossover não custe nada ao sistema.
+
+    p = 0,85  ->  fator 5,67
+                  conf 0,25 (chance 0,333) -> chance 1,89 -> score 0,654
+                  Resgate: cruzou o aceite de 0,5.
+
+    p = 0,35  ->  fator 0,538
+                  conf 0,60 (chance 1,50)  -> chance 0,807 -> score 0,447
+                  Derrubada: caiu abaixo do aceite.
+                  conf 0,90 (chance 9,00)  -> chance 4,84  -> score 0,829
+                  Sobrevive: forma convincente resiste à térmica adversa.
+
+Os três valores foram conferidos contra o código.
+
+A ASSIMETRIA, QUANTIFICADA. Com p_min = 0,35 e p_max = 0,85, os fatores são
+5,67 para cima e 0,538 para baixo. Em escala logarítmica:
+
+    ln(5,67)  = +1,735
+    ln(0,538) = -0,620
+
+A térmica empurra a favor com quase três vezes mais força do que empurra
+contra. Isso não é acidente de parametrização: é a assimetria de custo do
+problema (falso negativo custa uma vida, falso positivo custa uma ida em falso)
+inscrita num par de números. Deixá-la explícita aqui é melhor do que escondê-la
+numa cadeia de "se" - que é, de novo, uma vantagem da formulação numérica sobre
+a formulação por partes.
+
+A.10.5 O aceite e a contagem
+............................
+
+    aceita  <=>  não vetado  E  score >= 0,50
+
+O corte de 0,50 é numericamente idêntico ao CONF do detector anterior. Isso é
+metodologicamente essencial: mantida a barra, qualquer variação de recall
+observada é atribuível à evidência térmica e não ao afrouxamento do critério.
+Se a barra tivesse sido baixada junto, o experimento não teria controle.
+
+A classificação de origem, usada para contar o efeito da fusão:
+
+    conf >= 0,50  e  aceita              ->  Y+T  (confirmado)
+    conf <  0,50  e  aceita              ->  T>Y  (RESGATE)
+    conf >= 0,50  e  não aceita          ->  derrubado
+    regime crossover e aceita            ->  Y    (só forma)
+
+O par (resgates, derrubados) medido sobre um conjunto rotulado é o resultado
+quantitativo do projeto. É o que o painel 8 da análise mostra graficamente.
+
+A.10.6 A anotação secundária de estado térmico
+..............................................
+
+Aplicada apenas a caixas JÁ ACEITAS, sem efeito sobre a decisão:
+
+    crossover                                   -> "n/d"
+    ΔT_dir >= L(A)                              -> "ativo"
+    |ΔT_dir| < DT_EQUILIBRIO  e  A >= A_ref     -> "equilibrio"
+    |ΔT_dir| < DT_EQUILIBRIO  e  A <  A_ref     -> "equilibrio?"
+    caso contrário                              -> "fraco"
+
+A distinção entre "equilibrio" e "equilibrio?" é a mesma de A.5.2: com A < A_ref
+a estimativa do alvo é ruidosa demais para afirmar equilíbrio, e a diluição por
+spot-size pode explicar sozinha a leitura. O sinal de interrogação é literal - é
+um pedido para aproximar e reavaliar.
+
+
+-------------------------------------------------------------------------------
+ A.11  ERROS DE QUANTIZAÇÃO GEOMÉTRICA
+-------------------------------------------------------------------------------
+
+O YOLO trabalha na imagem ampliada (640x480) e devolve coordenadas em ponto
+flutuante. Para ler a temperatura precisamos voltar ao espaço térmico
+(160x120), dividindo por ZOOM = 4 e truncando para inteiro:
+
+    tx1 = floor(x1/4),  tx2 = floor(x2/4),  etc.
+
+O truncamento introduz erro. Note que ele NÃO aparece quando a largura é um
+número inteiro de pixels térmicos, porque nesse caso
+floor(x+w) - floor(x) = w exatamente. O erro só se manifesta com larguras
+fracionárias - que é o caso real, já que a projeção de uma pessoa a 8,3 metros
+não dá um número redondo de pixels.
+
+Simulação com 40.000 posicionamentos aleatórios:
+
+    bbox 7,9 x 29,97 px (A = 237, pessoa a ~10 m):
+        erro médio de área = 0,0%   desvio = 3,8%   p5 = -11,3%
+
+    bbox 17,6 x 66,6 px (A = 1172, pessoa a ~4,5 m):
+        erro médio de área = 0,0%   desvio = 2,9%   p5 =  -4,3%
+
+Leitura: o erro é não-viesado (média zero - o truncamento tanto tira quanto
+deixa, dependendo de onde a caixa cai na grade), mas tem dispersão maior para
+caixas pequenas, e a cauda ruim chega a -11% para a pessoa distante.
+
+Agora combine isso com A.6.3, que mediu a sensibilidade do limiar à área: 100%
+de erro de área desloca o limiar em ~0,45 °C na região de A = 237. Então:
+
+    11% de erro de área  ->  ~0,05 °C de erro no limiar
+
+Contra uma margem de segurança de 0,5 °C, é um décimo. CONCLUSÃO: a
+quantização geométrica não precisa ser corrigida. Vale registrar a conta,
+porém - tanto porque a conclusão poderia ter sido a oposta, quanto porque em
+uma câmera de resolução ainda menor ela seria.
+
+
+-------------------------------------------------------------------------------
+ A.12  TODAS AS FÓRMULAS EM UMA PÁGINA
+-------------------------------------------------------------------------------
+
+RADIOMETRIA
+    T[°C]          = raw/64 - 273,15
+    σ_quantização  = q/√12,  q = 1/64      -> 0,0045 K
+    L_medida       = ε·L(T_obj) + (1-ε)·L(T_refl)
+    T_obj          = [ (T_med^n - (1-ε)T_refl^n)/ε ]^(1/n),   n ≈ 4,6 (LWIR)
+
+ÓPTICA
+    IFOV           = FOV_rad/N                    -> 5,6723e-3 rad/px
+    A(d)           = min(H, h/(d·IFOV))·min(W, w/(d·IFOV))
+    d(A)           = sqrt( A_real/(A·IFOV²) )     (só se d > 2,50 m)
+    ln A           = const - 2·ln d               (justifica bins log)
+    d_min_enquadra = h/(H·IFOV)                   -> 2,50 m
+
+ESTATÍSTICA
+    quantil p      : posição p·(n-1) no vetor ordenado, interpolação linear
+    ponto ruptura  : média 0 | mediana 0,5
+    EP(mediana)    = 1,2533·σ/√n                  -> 0,5 mK com n=15000
+    Var(quantil)   ≈ p(1-p)/(n·f(x_p)²)
+
+SPOT-SIZE
+    L_medida       = f·L(T_alvo) + (1-f)·L(T_fundo)
+    ΔT_medido      = f · ΔT_verdadeiro            (equação fundamental)
+    f(A)           ≈ 1 - c/sqrt(A)                (modelo I, físico)
+    f(A)           ≈ min(1, A/A_ref)^p            (modelo II, o do código)
+
+PROPAGAÇÃO DE ERRO
+    T_medida       = T_verdadeira + b + ε
+    ΔT             = ΔT_verdadeiro + (ε₁ - ε₂)    (o viés b cancela)
+    Var(X-Y)       = Var X + Var Y - 2·Cov(X,Y)
+
+RÉGUA DE CONTRASTE
+    limiar(A)      = dt_longe + (dt_perto - dt_longe)·[min(1, A/A_ref)]^p
+    d(limiar)/dlnA = (dt_perto - dt_longe)·p·[min(1,A/A_ref)]^p
+
+FUSÃO
+    s(regime)      = +1 (frio) | -1 (quente) | 0 (crossover)
+    ΔT_dir         = ΔT · s(regime)
+    ρ              = ΔT_dir / limiar(A)           (adimensional)
+    S(x)           = 3x² - 2x³  em [0,1]          (smoothstep, S'(0)=S'(1)=0)
+    p(ρ)           = p_min + (p_max - p_min)·S(ρ)
+    O              = P/(1-P)                      (chance)
+    O_final        = O_yolo · p/(1-p)             (regra de Bayes em chances)
+    score          = O_final/(1 + O_final)
+    aceita         <=> não vetado E score >= 0,50
+    veto           : T_alvo > 40 (frio/crossover) | ΔT > 5 (quente)
+
+AJUSTE
+    S(θ)           = Σ [ y_i - g(A_i;θ) ]²
+    Gauss-Newton   : (JᵀJ)δ = Jᵀr
+    Levenberg-Marq.: (JᵀJ + λI)δ = Jᵀr
+    sanidade       : exige dt_perto > dt_longe
+
+RESFRIAMENTO
+    dT/dt          = -k(T - T_amb)
+    |ΔT|(t)        = |ΔT₀|·e^(-t/τ),   τ = 1/k
+    ajuste         : ln|ΔT| = ln|ΔT₀| - t/τ  (regressão linear)
+    validade       : Bi = h·L_c/k_corpo << 1  (NÃO vale bem p/ corpo humano)
+
+
+-------------------------------------------------------------------------------
+ A.13  O QUE, NESTE APÊNDICE, AINDA É CHUTE
+-------------------------------------------------------------------------------
+
+Fecho com a lista honesta, porque numa banca a pergunta vem:
+
+  1. O expoente p = 0,5 da curva de limiar. Forma funcional escolhida por
+     conveniência, não derivada. A calibração o mede; o modelo alternativo
+     (A.4.4, modelo I) não foi testado.
+
+  2. As fronteiras de regime, 33 °C e 36 °C. Vêm de literatura fisiológica
+     genérica, não de medição nossa. O painel 3 da calibração as testa.
+
+  3. DT_VETO_FONTE_CALOR = 5 °C. Escolhido por ordem de grandeza. O argumento
+     termodinâmico que o sustenta (corpo passivo não ultrapassa o ambiente) é
+     sólido; o VALOR da margem não foi medido.
+
+  4. O modelo de lente (A.2.2). Incerteza de até 15% na área prevista. O painel
+     4 da calibração resolve isso empiricamente.
+
+  5. As dimensões da pessoa de referência (1,70 x 0,45 m). Afetam a conversão
+     área <-> distância, mas não a régua, já que esta é função da área medida
+     diretamente.
+
+  6. O percentil 99 como estatística do alvo (A.3.2). Perde robustez em caixas
+     pequenas e não há mapeamento de pixels defeituosos.
+
+  7. P_TERMICA_MIN = 0,35 e P_TERMICA_MAX = 0,85 (A.10.4). São os dois números
+     que definem QUANTO a térmica empurra a decisão, e hoje são os mais frágeis
+     do sistema: não há nenhuma amostra negativa coletada, logo não há nenhuma
+     medida da separação entre pessoa e não-pessoa. O passo 5 da seção 7 e o
+     painel 7 da análise existem exatamente para isso.
+
+     Consequência honesta enquanto isso não for feito: o sistema pode ser
+     apresentado como uma ARQUITETURA de fusão validada, não como uma fusão com
+     ganho medido. A frase "a térmica aumentou a robustez" não tem, hoje, número
+     nenhum por trás.
+
+  8. Os filtros geométricos das propostas térmicas (aspecto máximo 5:1,
+     preenchimento mínimo 0,35, área entre 30 px e 35% do frame). Escolhidos
+     por raciocínio geométrico sobre a forma de um corpo versus a de um cano ou
+     de uma parede aquecida, e verificados em cena sintética - não medidos em
+     campo. A taxa de candidato falso em ambiente real é desconhecida.
+
+  9. A hipótese de independência entre forma e temperatura (seção 10.6). A
+     multiplicação de chances de A.10.4 a supõe, e ela é falsa em algum grau,
+     porque as duas evidências saem da mesma imagem e degradam juntas com a
+     distância. Não há correção implementada.
+
+Os itens 1, 2 e 4 a calibração resolve com os dados que já vamos coletar. O item
+7 depende de coletar os negativos, que é o passo mais fácil de pular e o mais
+caro de não ter. Os itens 3, 5, 6, 8 e 9 continuarão sendo escolhas de projeto
+até que alguém os meça.
+
+===============================================================================
+ Fim do documento.
+===============================================================================

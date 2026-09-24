@@ -1,0 +1,33 @@
+# Datasets e capturas brutas: ficam só locais (volume de GB e imagens de pessoas).
+ThermalDataset/
+temperatura_camera/ThermalCachorro/*
+!temperatura_camera/ThermalCachorro/data.yaml
+!temperatura_camera/ThermalCachorro/README.dataset.txt
+!temperatura_camera/ThermalCachorro/README.roboflow.txt
+!temperatura_camera/ThermalCachorro/train.py
+temperatura_camera/ensaio_bancada/*.npy
+temperatura_camera/ensaio_bancada/*.jpg
+runs/
+
+# Pesos: só o modelo em produção (thermal_person_finetune_rostos/weights/best.*) sobe.
+# Os outros treinos sobem só com métricas e gráficos, que o ROADMAP cita como evidência.
+*.pt
+*.onnx
+!temperatura_camera/thermal_person_finetune_rostos/weights/best.pt
+!temperatura_camera/thermal_person_finetune_rostos/weights/best.onnx
+!AndroidThermalDetector/app/src/main/assets/best.onnx
+
+# Android: artefatos de build e configuração da máquina local.
+AndroidThermalDetector/.gradle/
+AndroidThermalDetector/.idea/
+AndroidThermalDetector/local.properties
+AndroidThermalDetector/**/build/
+
+# Artigos de terceiros (direitos dos autores/editora): só locais.
+*.pdf
+
+# Configurações locais do Claude Code e lixo de Python.
+.claude/
+__pycache__/
+*.pyc
+*.swp
