@@ -17,7 +17,7 @@ Como usar
    mais importam e os mais chatos de coletar — sem eles o DT_VIVO_LONGE sai
    otimista e o detector perde vítima longe.
 6. Refaça num cômodo QUENTE (>36°C) e num FRIO (~20°C).
-7. 'q' para sair. Dados em calibracao_termica/amostras.csv; cada amostra guarda
+7. 'q' para sair. Dados em calibracao/dados/amostras.csv; cada amostra guarda
    o frame bruto .npy para reanálise.
 
 Classes de alvo ('k' alterna)
@@ -59,6 +59,13 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+import sys
+# termica_comum.py fica na pasta de cima, junto do detect.py: os dois PRECISAM usar o mesmo
+# módulo, senão a calibração deixa de valer para o detector.
+PASTA_PROJETO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PASTA_PROJETO)
+PASTA_DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
+
 from p3_camera import P3Camera, get_model_config, raw_to_celsius
 from termica_comum import (
     RelogioNuc,
@@ -68,7 +75,7 @@ from termica_comum import (
 )
 
 # --- CONFIGURAÇÃO ---
-MODELO = "thermal_person_finetune_rostos/weights/best.pt"
+MODELO = os.path.join(PASTA_PROJETO, "thermal_person_finetune_rostos/weights/best.pt")
 ZOOM = 4
 # MESMO portão do detect.py (CONF_BRUTO), não o limiar de aceite. A amostra
 # precisa cobrir a população que o detector realmente vê: se coletássemos a 0.5 e
@@ -120,7 +127,7 @@ def main():
     ap.add_argument("--local", required=True,
                     help="identificador do cômodo (ex.: sala_fria, galpao_quente). "
                          "Vai em cada linha do CSV p/ separar as sessões na análise.")
-    ap.add_argument("--pasta", default="calibracao_termica")
+    ap.add_argument("--pasta", default=PASTA_DADOS)
     ap.add_argument("--distancia-inicial", type=float, default=1.0)
     args = ap.parse_args()
 

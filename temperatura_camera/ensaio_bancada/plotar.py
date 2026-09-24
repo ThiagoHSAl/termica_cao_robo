@@ -9,9 +9,7 @@ matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 
 # Procura o arquivo tanto na subpasta quanto na raiz
-ARQUIVO_CSV = "ensaio_bancada/log_temperaturas.csv"
-if not os.path.exists(ARQUIVO_CSV):
-    ARQUIVO_CSV = "log_temperaturas.csv"
+ARQUIVO_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_temperaturas.csv")
 
 # Lista para armazenar apenas os dados desejados
 tempos_minutos = []

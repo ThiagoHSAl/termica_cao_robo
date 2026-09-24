@@ -25,38 +25,33 @@ coletada**. Todos os limiares térmicos do `detect.py` são provisórios. O plan
 
 | Pasta | O quê |
 |---|---|
-| `temperatura_camera/` | O projeto: detector, calibração, modelos. Detalhes abaixo. |
-| `ThermalDataset/` | Capturas brutas da P1 (24/06, 09/07 e 10/07/2026) que, rotuladas no Roboflow, viraram o `ThermalCachorro`. |
+| `temperatura_camera/` | O projeto: detector, calibração, ensaio de bancada, treino e modelo. Detalhes abaixo. |
 | `AndroidThermalDetector/` | App Android que roda o modelo sobre o vídeo do app oficial da câmera (captura de tela + sobreposição). Tem README próprio. |
-| `runs/` | Saída de uma predição de teste do Ultralytics. |
+
+Os datasets ficam fora do repositório, em `datasets/` (local).
 
 ### `temperatura_camera/`
 
-| Arquivo | Papel |
+| Arquivo / pasta | Papel |
 |---|---|
 | `ROADMAP.md` | **Fonte de verdade**: estado de cada passo, critérios de conclusão e diário de sessões. |
 | `detect.py` | Detector em operação (câmera ao vivo). Todos os limiares no topo do arquivo. |
 | `termica_comum.py` | Geometria do sensor, termometria, curva de *spot-size*, fusão. Compartilhado entre detecção e calibração: se divergir, a calibração deixa de valer para o detector. |
-| `calibracao_temperatura.py` | Coleta de amostras de assinatura térmica × distância (Passo 1). Ainda não foi executado. |
-| `analisar_calibracao.py` | Ajusta a curva às amostras e imprime os parâmetros para o `detect.py`. |
-| `temperatura.py`, `plotar.py`, `ensaio_bancada/` | Ensaio de bancada de 1 h (temperatura lida ao longo do tempo) e seus gráficos. |
-| `distancia.py` | Gráfico de temperatura × distância com dados coletados num corredor. |
+| `calibracao/` | `calibracao_temperatura.py` coleta a assinatura térmica × distância (Passo 1, ainda não executado); `analisar_calibracao.py` ajusta a curva e imprime os parâmetros para o `detect.py`. Dados em `calibracao/dados/`. |
+| `ensaio_bancada/` | Ensaio de 1 h da temperatura lida ao longo do tempo (`temperatura.py`, `plotar.py`, `log_temperaturas.csv`), temperatura × distância num corredor (`distancia.py`) e os gráficos. |
+| `treinamento/train.py` | Receita do fine-tune (YOLOv12s, 100 épocas, *augmentations* ajustadas para térmica). |
+| `thermal_person_finetune_rostos/` | **Modelo em produção** (usado pelo `detect.py`): pesos, métricas e gráficos do treino. |
 | `EXPLICACAO_SISTEMA_TERMICO.txt` | Explicação do sistema para leigos. |
-| `ThermalCachorro/` | Dataset do fine-tune: 165 treino / 70 validação, 1 classe (`person`). [Roboflow](https://universe.roboflow.com/yolodrone-kbw1e/thermal-cachorro), CC BY 4.0. |
-| `thermal_person_finetune_rostos/` | **Modelo em produção** (usado pelo `detect.py`). |
-| `thermal_person_finetune/` | Fine-tune anterior. |
-| `yolo12s_thermal2/`, `yolo12s_thermal-3/` | Treinos-base YOLOv12s (mesmo `train.py` do drone). |
 
-## Modelos
+## Modelo
 
-| Modelo | Melhor época | mAP50 | mAP50-95 |
-|---|---|---|---|
-| `thermal_person_finetune_rostos` (produção) | 94 / 100 | 0,917 | 0,703 |
-| `thermal_person_finetune` | 85 / 100 | 0,896 | 0,678 |
+`thermal_person_finetune_rostos`: YOLOv12s fine-tunado em 165 imagens térmicas da própria P1
+(dataset [ThermalCachorro](https://universe.roboflow.com/yolodrone-kbw1e/thermal-cachorro),
+CC BY 4.0, 1 classe `person`). Melhor época 94 de 100: mAP50 0,917, mAP50-95 0,703.
 
-> **Estes números estão inflados.** O `ThermalCachorro` foi dividido em treino/validação por
-> imagem, não por sessão de captura. Quadros quase idênticos da mesma sessão caem dos dois lados,
-> e a validação mede memorização. O re-split por sessão, com um conjunto de teste retido, é o
+> **Estes números estão inflados.** O dataset foi dividido em treino/validação por imagem, não
+> por sessão de captura. Quadros quase idênticos da mesma sessão caem dos dois lados, e a
+> validação mede memorização. O re-split por sessão, com um conjunto de teste retido, é o
 > Passo 2 do roadmap. Não citar estes valores antes dele.
 
 ## Como rodar
@@ -65,9 +60,10 @@ coletada**. Todos os limiares térmicos do `detect.py` são provisórios. O plan
 # driver da câmera (engenharia reversa): https://github.com/jvdillon/p3-ir-camera
 export PYTHONPATH=~/p3-ir-camera:$PYTHONPATH
 cd temperatura_camera
-python3 detect.py                                    # detecção ao vivo
-python3 calibracao_temperatura.py --local <comodo>   # coleta (Passo 1)
-python3 analisar_calibracao.py                        # ajuste da curva
+python3 detect.py                                               # detecção ao vivo
+python3 calibracao/calibracao_temperatura.py --local <comodo>   # coleta (Passo 1)
+python3 calibracao/analisar_calibracao.py                        # ajuste da curva
+python3 ensaio_bancada/plotar.py                                 # gráfico do ensaio de bancada
 ```
 
 Dependências: `ultralytics`, `opencv-python`, `numpy`, `scipy` (análise).

@@ -1,8 +1,9 @@
 from pathlib import Path
 from ultralytics import YOLO
 
-# Diretório deste script (torna os caminhos portáveis dentro/fora de container)
-ROOT = Path(__file__).resolve().parent
+# O dataset e o best.pt de partida ficam fora do git, em termica_cao_robo/datasets/ThermalCachorro
+# (estavam junto deste script dentro do dataset até 2026-09-24).
+ROOT = Path(__file__).resolve().parents[2] / "datasets" / "ThermalCachorro"
 
 # Fine-tuning a partir do best.pt (já pré-treinado em imagens térmicas da internet).
 # Objetivo: adaptar para pessoas de perto capturadas pela câmera térmica própria.

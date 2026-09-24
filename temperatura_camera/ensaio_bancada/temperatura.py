@@ -10,7 +10,7 @@ from p3_camera import Model, P3Camera, get_model_config, raw_to_celsius
 INTERVALO = 5  # segundos
 DURACAO_TOTAL = 3600  # 1 hora em segundos
 MODELO = Model.P1
-PASTA_DESTINO = "ensaio_bancada"
+PASTA_DESTINO = os.path.dirname(os.path.abspath(__file__))  # grava ao lado deste script
 ARQUIVO_CSV = os.path.join(PASTA_DESTINO, "log_temperaturas.csv")
 
 if not os.path.exists(PASTA_DESTINO):

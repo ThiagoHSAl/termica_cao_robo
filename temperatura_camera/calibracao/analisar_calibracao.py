@@ -30,7 +30,7 @@ As amostras 'negativo_*' entram aqui exatamente para isso, e delas saem os dois
 parâmetros da fusão do detect.py (P_TERMICA_MIN/P_TERMICA_MAX) — quanto a
 térmica pode empurrar a decisão em cada sentido.
 
-Saídas: 9 gráficos em calibracao_termica/curva_calibracao.png e, no terminal,
+Saídas: 9 gráficos em calibracao/dados/curva_calibracao.png e, no terminal,
 os parâmetros prontos para colar no topo do detect.py.
 """
 
@@ -46,6 +46,13 @@ matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
+import sys
+# termica_comum.py fica na pasta de cima, junto do detect.py: os dois PRECISAM usar o mesmo
+# módulo, senão a calibração deixa de valer para o detector.
+PASTA_PROJETO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PASTA_PROJETO)
+PASTA_DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
+
 from termica_comum import (
     DISTANCIA_MIN_ENQUADRA_M,
     area_esperada_px,
@@ -55,7 +62,7 @@ from termica_comum import (
     plausibilidade_termica,
 )
 
-ARQUIVO_CSV = "calibracao_termica/amostras.csv"
+ARQUIVO_CSV = os.path.join(PASTA_DADOS, "amostras.csv")
 PERCENTIL_ENVOLTORIA = 10   # borda inferior da nuvem por faixa de área
 MARGEM_SEGURANCA = 0.5      # °C abaixo da envoltória p/ não rejeitar vivo
 N_BINS_ENVOLTORIA = 6
@@ -584,8 +591,8 @@ def main():
     ax9.legend(loc="upper left", fontsize=9)
 
     plt.tight_layout()
-    plt.savefig("calibracao_termica/curva_calibracao.png", dpi=120)
-    print("\nGráfico salvo em calibracao_termica/curva_calibracao.png")
+    plt.savefig(os.path.join(PASTA_DADOS, "curva_calibracao.png"), dpi=120)
+    print(f"\nGráfico salvo em {os.path.join(PASTA_DADOS, 'curva_calibracao.png')}")
     plt.show()
 
 

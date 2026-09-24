@@ -101,7 +101,7 @@ Substituir por medida os parâmetros do `detect.py` que hoje são chute declarad
 `DT_VIVO_PERTO`, `DT_VIVO_LONGE`, `EXPOENTE_LIMIAR`, `P_TERMICA_MIN`, `P_TERMICA_MAX`.
 
 ### Por quê
-`calibracao_termica/` **não existe** — zero amostras coletadas. Toda a régua de decisão
+`calibracao/dados/` **não existe** — zero amostras coletadas. Toda a régua de decisão
 do sistema repousa em números inventados, e não existe nenhuma taxa de falso positivo
 para apresentar. O DualFOD faz o mínimo exigível: varre ΔT ∈ {2,3,5,7,10} °C e tabula
 TP/FP/miss (ΔT=2 → precisão 0.55; ΔT=5 → 0.89; ΔT=7 → 1.00 mas perde 6 de 12).
@@ -112,7 +112,7 @@ Meia página de artigo — e é o que sustenta a escolha do limiar.
 ### Tarefas
 
 - [ ] Sessão de coleta em cômodo **FRIO** (~20 °C), classe `viva`:
-      `python3 calibracao_temperatura.py --local sala_fria`
+      `python3 calibracao/calibracao_temperatura.py --local sala_fria`
       Distâncias 1, 2, 3, 4, 5, 6, 8, 10, 12 m · ~10 amostras por distância ·
       variando pose (`p`) e vestuário (`v`) · `s` para NUC **antes de cada bloco**.
 - [ ] Mesma coleta em cômodo **QUENTE** (>36 °C) — define o regime `quente`.
@@ -124,12 +124,12 @@ Meia página de artigo — e é o que sustenta a escolha do limiar.
       `negativo_outro`.
 - [ ] Proxies de triagem: `proxy_resfriando` (recipiente a ~35 °C, `r` zera o
       cronômetro no início) e `proxy_ambiente`.
-- [ ] `python3 analisar_calibracao.py`
+- [ ] `python3 calibracao/analisar_calibracao.py`
 - [ ] Colar os parâmetros impressos no topo do `detect.py`, **trocando os comentários
       de "PROVISÓRIOS" por a data e o n da coleta que os produziu**.
 
 ### Critério de conclusão
-`calibracao_termica/amostras.csv` existe, com ≥ 300 amostras `viva` cobrindo os 9
+`calibracao/dados/amostras.csv` existe, com ≥ 300 amostras `viva` cobrindo os 9
 pontos de distância em ≥ 2 regimes, e ≥ 200 amostras `negativo_*`.
 `analisar_calibracao.py` roda sem avisos de amostra insuficiente e os 5 parâmetros
 estão no `detect.py` com procedência anotada.
@@ -145,8 +145,8 @@ estão no `detect.py` com procedência anotada.
   (inclusive aplicar o Passo 7 retroativamente, sem recoletar).
 
 ### Arquivos
-`calibracao_temperatura.py` · `analisar_calibracao.py` · `termica_comum.py` ·
-saída em `calibracao_termica/`
+`calibracao/calibracao_temperatura.py` · `calibracao/analisar_calibracao.py` · `termica_comum.py` ·
+saída em `calibracao/dados/`
 
 ---
 
@@ -191,7 +191,7 @@ aeródromo. O FLAME 3 treina em queimadas e testa em queimadas diferentes.
 - [ ] Coletar ≥ 1 sessão nova, em **outro cômodo e com outra pessoa**, exclusiva para
       teste. É o equivalente à *cross-site validation* do DualFOD e vale mais que
       qualquer ganho de mAP no split interno.
-- [ ] Retreinar com `ThermalCachorro/train.py` (hiperparâmetros já estão adequados).
+- [ ] Retreinar com `treinamento/train.py` (hiperparâmetros já estão adequados).
 - [ ] Medir no test set retido: `yolo val model=<best.pt> data=<data.yaml> split=test`
 - [ ] Registrar no diário **os dois números**: mAP50 antigo (0.905, inflado) e o novo.
 
@@ -204,7 +204,7 @@ Não ajuste hiperparâmetro olhando o test set. Se mexer, o test set virou valid
 o número perdeu o valor.
 
 ### Arquivos
-`ThermalCachorro/data.yaml` · `ThermalCachorro/train.py` · `thermal_person_finetune_rostos/`
+`../datasets/ThermalCachorro/data.yaml` (fora do git) · `treinamento/train.py` · `thermal_person_finetune_rostos/`
 
 ---
 
@@ -308,7 +308,7 @@ contraproducente.
 
 ### Arquivos
 `termica_comum.py` (função nova) · `detect.py` (troca da linha de entrada) ·
-`calibracao_temperatura.py` (mesma entrada, para não divergir) · `ThermalCachorro/train.py`
+`calibracao_temperatura.py` (mesma entrada, para não divergir) · `treinamento/train.py`
 
 ---
 
@@ -458,6 +458,20 @@ O comentário da banda `T_HUMANO_MIN/MAX` no `detect.py` cita um erro de emissiv
 ---
 
 ## Diário de sessões
+
+### 2026-09-24 — Reorganização de pastas (sem mudança de método)
+- `calibracao_temperatura.py` e `analisar_calibracao.py` → `calibracao/`; dados agora em
+  `calibracao/dados/` (antes `calibracao_termica/`). Os dois importam o `termica_comum.py`
+  da pasta de cima — continua um módulo só, compartilhado com o `detect.py`.
+- Ensaio de bancada (`temperatura.py`, `plotar.py`, `distancia.py` e gráficos) →
+  `ensaio_bancada/`, gravando e lendo ao lado do próprio script.
+- `ThermalCachorro/train.py` → `treinamento/train.py`; o dataset (e o `best.pt` de partida)
+  foi para `../datasets/ThermalCachorro/`, fora do git, junto com o `ThermalDataset`.
+- Treinos antigos (`thermal_person_finetune`, `yolo12s_thermal2`, `yolo12s_thermal-3`) saíram
+  do projeto; ficaram fora dele, fora do git. As métricas citadas no Passo 2 e nas entradas
+  abaixo continuam valendo como registro.
+- Verificado: os scripts movidos resolvem caminhos rodando de outra pasta; `plotar.py`
+  plotou os 677 pontos do `log_temperaturas.csv`.
 
 <!-- Formato: ## AAAA-MM-DD — Passo N — quem
      O que foi feito · o número que saiu · o que travou · o que fazer a seguir.

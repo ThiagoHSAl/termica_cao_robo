@@ -23,10 +23,10 @@ Ao terminar: marque as tarefas, atualize o status e **escreva no `#Diário de se
 | `../../mapa_termo_semantico/` | **Repositório separado** (GitHub privado `ThiagoHSAl/mapa_termo_semantico`): Pioneer 3-DX + Hokuyo em ROS 2, roadmap `ROADMAP_PIONEER_SLAM.md` e código `pioneer/`. Movido para lá em 2026-09-24. |
 | `detect.py` | Detector em operação. Fusão forma + térmica. Todos os limiares no topo. |
 | `termica_comum.py` | Geometria do sensor, termometria, curva de spot-size, fusão. Compartilhado entre detecção e calibração — **se divergir, a calibração deixa de valer para o detector.** |
-| `calibracao_temperatura.py` | Coleta de amostras (Passo 1). Nunca foi executado. |
-| `analisar_calibracao.py` | Ajusta a curva e imprime os parâmetros para colar no `detect.py`. |
+| `calibracao/` | `calibracao_temperatura.py` (coleta, Passo 1 — nunca executado) e `analisar_calibracao.py` (ajusta a curva e imprime os parâmetros para o `detect.py`). Dados em `calibracao/dados/`. |
 | `EXPLICACAO_SISTEMA_TERMICO.txt` | Explicação geral do sistema, para leigos. |
-| `ThermalCachorro/` | Dataset do fine-tune (165 train / 70 valid, 1 classe). Split com vazamento — ver Passo 2. |
+| `ensaio_bancada/` | Ensaio de temperatura ao longo do tempo, temperatura × distância e gráficos. |
+| `treinamento/train.py` | Receita do fine-tune. Dataset em `../datasets/ThermalCachorro/` (fora do git; 165 train / 70 valid, split com vazamento — ver Passo 2). |
 | `thermal_person_finetune_rostos/` | Modelo **em produção** (usado pelo `detect.py`). |
 
 Dependência externa: `p3_camera` em `~/p3-ir-camera/p3_camera.py`.
