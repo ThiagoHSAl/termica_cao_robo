@@ -74,7 +74,7 @@ Dependências: `ultralytics`, `opencv-python`, `numpy`, `scipy` (análise).
 
 ## Relação com os outros projetos
 
-- `../drone_sar/`: a pesquisa anterior (drone, RGB + térmica, artigo CROS 2026). A P1 e o
-  driver são os mesmos.
-- `../mapa_termo_semantico/`: a direção atual (Pioneer 3-DX + LIDAR + térmica em ROS 2). O
-  detector daqui é o que vai alimentar o mapa semântico.
+- [`drone_sar`](https://github.com/ThiagoHSAl/drone_sar): a pesquisa anterior (drone, RGB +
+  térmica, artigo CROS 2026). A P1 e o driver são os mesmos.
+- `mapa_termo_semantico` (repositório privado): a direção atual (Pioneer 3-DX + LIDAR + térmica
+  em ROS 2). O detector daqui é o que vai alimentar o mapa semântico.
